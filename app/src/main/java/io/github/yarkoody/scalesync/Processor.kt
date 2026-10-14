@@ -87,6 +87,10 @@ object Processor {
         if (synced) {
             history.markSynced(a.sessionId)
             _historyVersion.value++
+            // Catch up any earlier weigh-ins that missed Health Connect.
+            retryUnsynced(context)
+        } else {
+            SyncWorker.schedule(context)
         }
         Notifier.weighInSaved(context, weighIn, synced)
     }
@@ -95,11 +99,15 @@ object Processor {
     suspend fun retryUnsynced(context: Context): Int {
         val history = History(context)
         var count = 0
+        var failed = 0
         for (w in history.all().filterNot { it.syncedToHealthConnect }) {
-            val ok = runCatching { HealthConnectWriter.write(context, w) }.getOrDefault(false)
-            if (ok) { history.markSynced(w.sessionId); count++ }
+            val ok = runCatching { HealthConnectWriter.write(context, w) }
+                .onFailure { Log.w(TAG, "Health Connect retry failed", it) }
+                .getOrDefault(false)
+            if (ok) { history.markSynced(w.sessionId); count++ } else failed++
         }
         if (count > 0) _historyVersion.value++
+        if (failed > 0) SyncWorker.schedule(context)
         return count
     }
 

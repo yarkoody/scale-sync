@@ -31,7 +31,7 @@ object Notifier {
             m.fatPercent?.let { append(String.format(Locale.US, " · %.1f%% fat", it)) }
         }
         val text = when {
-            !synced -> "Saved in Scale Sync. Open the app to finish the Health Connect setup."
+            !synced -> "Saved in Scale Sync. It will keep retrying Health Connect automatically."
             m.hasComposition -> "Sent to Health Connect with body composition."
             m.impedance == null -> "Weight only (no impedance: weigh barefoot and stay on until it finishes)."
             else -> "Sent to Health Connect. Add your profile in the app for body composition."
