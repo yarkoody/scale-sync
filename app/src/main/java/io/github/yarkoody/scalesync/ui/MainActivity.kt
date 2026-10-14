@@ -25,7 +25,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -38,6 +38,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -81,7 +83,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
+            val dark = isSystemInDarkTheme()
+            val colors = when {
+                Build.VERSION.SDK_INT >= 31 && dark -> dynamicDarkColorScheme(this)
+                Build.VERSION.SDK_INT >= 31 -> dynamicLightColorScheme(this)
+                dark -> darkColorScheme()
+                else -> lightColorScheme()
+            }
+            MaterialTheme(colorScheme = colors) {
                 Scaffold { padding -> App(padding) }
             }
         }
@@ -201,7 +210,10 @@ private fun App(padding: PaddingValues) {
                     TextButton(onClick = { shareCsv(context) }) { Text("Export CSV") }
                 }
             }
-            items(history, key = { it.sessionId }) { WeighInRow(it) }
+            item { TrendCard(history) }
+            itemsIndexed(history, key = { _, w -> w.sessionId }) { i, w ->
+                WeighInCard(w, previous = history.getOrNull(i + 1), startExpanded = i == 0)
+            }
         }
 
         if (profile != null) item {
@@ -215,7 +227,7 @@ private fun App(padding: PaddingValues) {
                 }
             } else {
                 val p = profile!!
-                Text("Profile: ${p.heightCm.toInt()} cm, born ${p.birthDate}, ${p.sex.name.lowercase()}, " +
+                Text("Profile: ${p.heightCm.toInt()} cm, born ${p.birthDate.format(BIRTH_FORMAT)}, ${p.sex.name.lowercase()}, " +
                     "${if (p.algorithm == Algorithm.XIAOMI) "Zepp Life formulas" else "bodymiscale formulas"}",
                     style = MaterialTheme.typography.bodySmall)
                 Row {
@@ -286,75 +298,6 @@ private fun PairCard(onPicked: (String) -> Unit) {
                 OutlinedButton(onClick = { onPicked(addr) }, modifier = Modifier.fillMaxWidth()) {
                     Text("$name  ($addr)")
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProfileCard(initial: Profile?, onSave: (Profile) -> Unit) {
-    var height by remember { mutableStateOf(initial?.heightCm?.toInt()?.toString() ?: "") }
-    var birth by remember { mutableStateOf(initial?.birthDate?.toString() ?: "") }
-    var sex by remember { mutableStateOf(initial?.sex ?: Sex.MALE) }
-    var algorithm by remember { mutableStateOf(initial?.algorithm ?: Algorithm.XIAOMI) }
-    var error by remember { mutableStateOf<String?>(null) }
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Your profile", style = MaterialTheme.typography.titleMedium)
-            Text("Body composition is calculated from your weight, impedance, height, age and sex.",
-                style = MaterialTheme.typography.bodySmall)
-            OutlinedTextField(height, { height = it }, label = { Text("Height (cm)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-            OutlinedTextField(birth, { birth = it }, label = { Text("Birth date (YYYY-MM-DD)") }, singleLine = true)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(sex == Sex.MALE, { sex = Sex.MALE }, label = { Text("Male") })
-                FilterChip(sex == Sex.FEMALE, { sex = Sex.FEMALE }, label = { Text("Female") })
-            }
-            Text("Formulas", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(algorithm == Algorithm.XIAOMI, { algorithm = Algorithm.XIAOMI }, label = { Text("Zepp Life") })
-                FilterChip(algorithm == Algorithm.SCIENCE, { algorithm = Algorithm.SCIENCE }, label = { Text("bodymiscale") })
-            }
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Button(onClick = {
-                val h = height.toFloatOrNull()
-                val b = runCatching { LocalDate.parse(birth.trim()) }.getOrNull()
-                when {
-                    h == null || h !in 50f..250f -> error = "Enter your height in cm."
-                    b == null || b.isAfter(LocalDate.now()) -> error = "Enter your birth date like 1990-05-21."
-                    else -> onSave(Profile(h, b, sex, algorithm))
-                }
-            }) { Text("Save") }
-        }
-    }
-}
-
-private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM, HH:mm").withZone(ZoneId.systemDefault())
-
-@Composable
-private fun WeighInRow(w: WeighIn) {
-    val m = w.metrics
-    fun f(v: Float?, unit: String, digits: Int = 1) = v?.let { String.format(Locale.US, "%.${digits}f", it) + unit }
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(String.format(Locale.US, "%.2f kg", m.weightKg), style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f))
-                Text(TIME.format(w.time), style = MaterialTheme.typography.bodySmall)
-            }
-            val parts = listOfNotNull(
-                f(m.fatPercent, "% fat"), f(m.waterPercent, "% water"), f(m.musclePercent, "% muscle"),
-                f(m.boneKg, " kg bone"), f(m.visceralFat, " visceral", 0), f(m.proteinPercent, "% protein"),
-                f(m.bmrKcal, " kcal BMR", 0), f(m.bmi, " BMI"),
-            )
-            if (parts.isNotEmpty()) Text(parts.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
-            else if (m.impedance == null) Text("Weight only (no impedance)", style = MaterialTheme.typography.bodySmall)
-            Row {
-                Text(if (w.syncedToHealthConnect) "In Health Connect" else "Not in Health Connect yet",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (w.syncedToHealthConnect) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
-                Spacer(Modifier.width(8.dp))
-                m.impedance?.let { Text("$it Ω", style = MaterialTheme.typography.labelSmall) }
             }
         }
     }
