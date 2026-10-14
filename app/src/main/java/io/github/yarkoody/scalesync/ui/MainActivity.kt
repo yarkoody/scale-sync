@@ -334,7 +334,7 @@ private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM, HH
 @Composable
 private fun WeighInRow(w: WeighIn) {
     val m = w.metrics
-    fun f(v: Float?, unit: String, digits: Int = 1) = v?.let { String.format(Locale.US, "%.${digits}f$unit", it) }
+    fun f(v: Float?, unit: String, digits: Int = 1) = v?.let { String.format(Locale.US, "%.${digits}f", it) + unit }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
