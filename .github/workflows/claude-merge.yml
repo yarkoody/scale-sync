@@ -1,0 +1,184 @@
+name: Claude merge agent
+
+# Looks after pull requests labelled "automerge":
+# - When one conflicts with main, Claude merges main into it, resolves the
+#   conflicts and pushes (the build and the review then run again).
+# - When CI is green and the Claude review has run on the latest commit,
+#   Claude checks that every review comment was fixed or answered. If so it
+#   approves and squash-merges; if not it leaves one comment saying what is
+#   still open.
+# PRs without the label are never touched.
+#
+# Needs the repo secret CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`)
+# and the Claude GitHub App installed on the repository.
+
+on:
+  pull_request:
+    types: [labeled, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+  workflow_run:
+    workflows: ["Build APK", "Claude PR review"]
+    types: [completed]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "PR number (leave empty for every open automerge PR)"
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read
+  actions: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.event == 'pull_request'
+    outputs:
+      targets: ${{ steps.gate.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          PR_FROM_EVENT: ${{ github.event.pull_request.number }}
+          PR_FROM_RUN: ${{ github.event.workflow_run.pull_requests[0].number }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          PR_FROM_INPUT: ${{ inputs.pr }}
+        run: |
+          case "$EVENT" in
+            pull_request|pull_request_review) pr="$PR_FROM_EVENT" ;;
+            workflow_run)
+              pr="$PR_FROM_RUN"
+              if [ -z "$pr" ]; then
+                pr=$(gh pr list --state open --head "$RUN_BRANCH" --json number --jq '.[0].number // empty')
+              fi
+              [ -n "$pr" ] || { echo 'targets=[]' >> "$GITHUB_OUTPUT"; exit 0; } ;;
+            workflow_dispatch) pr="$PR_FROM_INPUT" ;;
+            *) pr="" ;;
+          esac
+          targets=$(bash .github/scripts/merge-gate.sh $pr)
+          echo "targets=$targets" >> "$GITHUB_OUTPUT"
+
+  agent:
+    needs: gate
+    if: needs.gate.outputs.targets != '[]' && needs.gate.outputs.targets != ''
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.gate.outputs.targets) }}
+    concurrency:
+      group: claude-merge-${{ matrix.pr }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+      actions: read
+      id-token: write
+    steps:
+      - name: Read the PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ matrix.pr }}
+        run: |
+          gh pr view "$PR" --json headRefName,headRefOid,baseRefName \
+            --jq '"head=\(.headRefName)\nsha=\(.headRefOid)\nbase=\(.baseRefName)"' >> "$GITHUB_OUTPUT"
+          # Every review thread, with whether it was resolved or went out of
+          # date, for Claude to check what is still open.
+          gh api graphql -F owner="${GH_REPO%/*}" -F name="${GH_REPO#*/}" -F pr="$PR" -f query='
+            query($owner: String!, $name: String!, $pr: Int!) {
+              repository(owner: $owner, name: $name) {
+                pullRequest(number: $pr) {
+                  reviewThreads(first: 100) {
+                    nodes {
+                      isResolved isOutdated path line
+                      comments(first: 30) { nodes { author { login } body createdAt } }
+                    }
+                  }
+                }
+              }
+            }' --jq '.data.repository.pullRequest.reviewThreads.nodes' > "$RUNNER_TEMP/review-threads.json"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head }}
+          fetch-depth: 0
+
+      - name: Resolve conflicts
+        if: matrix.mode == 'resolve'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: claude
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ matrix.pr }}
+            PR BRANCH: ${{ steps.pr.outputs.head }} (checked out)
+            BASE BRANCH: ${{ steps.pr.outputs.base }}
+
+            This pull request conflicts with its base branch. Fix that:
+            1. git fetch origin ${{ steps.pr.outputs.base }}
+            2. git merge origin/${{ steps.pr.outputs.base }}
+               Never rebase, amend or force-push.
+            3. Resolve every conflict so both sides keep working: read what
+               each side changed (git log, git diff) and combine them. Keep
+               version numbers at the higher of the two.
+            4. Make sure no conflict markers are left, then commit with a
+               message like "Merge <base> into <branch>, resolve conflicts in
+               <files>" and git push.
+            If both sides changed the same logic and any resolution would
+            drop behaviour one side needs, run git merge --abort instead and
+            post one comment with
+              gh pr comment ${{ matrix.pr }} --body "<which files and why a person needs to choose>"
+            Do not approve or merge.
+          claude_args: |
+            --model sonnet
+            --max-turns 60
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git fetch:*),Bash(git merge:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(grep:*),Bash(gh pr view ${{ matrix.pr }}:*),Bash(gh pr comment ${{ matrix.pr }}:*)"
+
+      - name: Approve and merge
+        if: matrix.mode == 'decide'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: claude
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ matrix.pr }}
+            HEAD COMMIT: ${{ steps.pr.outputs.sha }}
+            REVIEW THREADS: ${{ runner.temp }}/review-threads.json
+
+            CI is green and the Claude review has run on the head commit.
+            Decide whether this PR is ready to merge. It is ready only if:
+            1. The latest Claude review (gh pr view ${{ matrix.pr }} --json reviews)
+               on the head commit says "no blocking issues", not "Request changes".
+            2. Every review thread in the REVIEW THREADS file is resolved,
+               outdated by a later commit that fixed it, or has a reply that
+               fixes or reasonably answers it.
+            3. No person's "Request changes" review is still standing, and
+               no person asked in a comment to hold the merge.
+
+            If it is ready:
+              gh pr review ${{ matrix.pr }} --approve --body "<one line on why it is ready>"
+              gh pr merge ${{ matrix.pr }} --squash --match-head-commit ${{ steps.pr.outputs.sha }}
+            If it is not ready, do not approve or merge. Leave one comment
+            listing exactly what is still open (edit your previous one rather
+            than adding another):
+              gh pr comment ${{ matrix.pr }} --edit-last --create-if-none --body "<what is still open>"
+          claude_args: |
+            --model sonnet
+            --max-turns 30
+            --add-dir ${{ runner.temp }}
+            --allowedTools "Read,Glob,Grep,Bash(gh pr view ${{ matrix.pr }}:*),Bash(gh pr diff ${{ matrix.pr }}:*),Bash(gh pr checks ${{ matrix.pr }}:*),Bash(gh pr review ${{ matrix.pr }} --approve:*),Bash(gh pr merge ${{ matrix.pr }} --squash:*),Bash(gh pr comment ${{ matrix.pr }}:*)"

@@ -1,0 +1,80 @@
+name: Claude PR review
+
+# Reviews every non-draft pull request with Claude Sonnet and leaves a GitHub
+# review on the head commit: "Request changes" when it finds something that
+# must be fixed, otherwise "Comment". It runs again on every push, so fixes
+# get re-reviewed. The merge agent (claude-merge.yml) waits for this check.
+#
+# Needs the repo secret CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`)
+# and the Claude GitHub App installed on the repository.
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Forks get no secrets, so only review branches of this repository.
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The merge agent pushes conflict fixes as the Claude app; let those
+          # pushes be reviewed too.
+          allowed_bots: claude
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            HEAD COMMIT: ${{ github.event.pull_request.head.sha }}
+
+            You are the code reviewer for Scale Sync / My Health, an Android
+            (Kotlin) app that reads a Xiaomi scale over Bluetooth and health
+            data from Health Connect. The repository is public. The PR branch
+            is checked out in the working directory.
+
+            Review the change (`gh pr diff`, `gh pr view`, and the files
+            themselves) for:
+            1. Bugs: crashes, wrong results, lifecycle or threading mistakes,
+               Bluetooth and Health Connect permission handling, data written
+               twice or lost.
+            2. Privacy: personal or health data (names, ID numbers, lab
+               results, health records, real measurements) or secrets
+               (keystores, passwords, tokens) committed to this public repo.
+               Treat any of these as blocking.
+            3. Build and release: anything that would break the Gradle build,
+               the unit tests, or APK signing in .github/workflows/build.yml.
+            Skip style nits unless they hide a bug. Read earlier review
+            comments on the PR and do not repeat points that were already
+            fixed or answered.
+
+            Put each concrete problem on its line with
+            mcp__github_inline_comment__create_inline_comment.
+
+            Finish by submitting exactly one review:
+            - If anything must be fixed before merging:
+              gh pr review ${{ github.event.pull_request.number }} --request-changes --body "<summary>"
+            - Otherwise:
+              gh pr review ${{ github.event.pull_request.number }} --comment --body "<summary>"
+            Start the summary with "**Claude review:** no blocking issues" or
+            "**Claude review:** N blocking issue(s)", then a short list.
+            Never approve; the merge agent does that.
+          claude_args: |
+            --model sonnet
+            --max-turns 40
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr review ${{ github.event.pull_request.number }} --comment:*),Bash(gh pr review ${{ github.event.pull_request.number }} --request-changes:*)"
