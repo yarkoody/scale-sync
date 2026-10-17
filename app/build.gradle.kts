@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.yarkoody.scalesync"
         minSdk = 28
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.1.4"
+        versionCode = 6
+        versionName = "0.2.0"
     }
 
     // Optional fixed signing key from CI secrets, so each build installs over the previous one.

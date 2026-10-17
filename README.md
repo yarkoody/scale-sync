@@ -1,13 +1,41 @@
-# Scale Sync
+# My Health (Scale Sync)
 
-A small Android app for the **Xiaomi Mi Body Composition Scale 2** (and the first Mi Body
-Composition Scale, Bluetooth name `MIBCS`/`MIBFS`). It reads every weigh-in the moment the
-scale finishes and writes it straight to **Health Connect**, so Google Health and other apps
-see it. No separate sync app, no cloud account, no internet permission.
+A personal Android health app: one place for your wearable, scale and HMO medical data, with
+Claude for insights. It started as Scale Sync, a reader for the **Xiaomi Mi Body Composition
+Scale 2**, and still is one (the Body tab). Inspired by
+[Wellness Project](https://wellnessproject.ai/), but local-first: the app has no internet
+permission, so nothing leaves the phone unless you send it somewhere.
 
-Built from [openScale](https://github.com/oliexdev/openScale)'s Xiaomi code (GPLv3).
+## Tabs
 
-## How it differs from openScale
+- **Today:** last night's sleep, resting heart rate, HRV, steps, blood oxygen, breathing rate
+  and weight, each against your own 7- and 30-day baseline, plus check-ups and renewals coming up.
+- **Sleep:** nightly duration and stages, bedtime/wake averages and consistency, a 14-night chart.
+- **Body:** the scale (live reading, pairing, weigh-ins, CSV export).
+- **Records:** blood tests over the years with ranges and trends, medications, history, open
+  referrals, and the original PDFs. Israeli HMOs (Meuhedet, Clalit, Maccabi) have no patient
+  API, so documents come in as PDFs: add one, send it to Claude, paste Claude's reply back.
+- **Ask AI:** pick your assistant (Claude, ChatGPT, Gemini, Copilot, Perplexity) and a focus
+  (weekly check-in, sleep coach, labs and longevity, body composition, doctor visit prep), and
+  send a compact brief of your data to it.
+
+Wearable data comes from **Health Connect** (Google Health writes Fitbit data there).
+
+### Using your AI subscription
+
+Claude, Gemini, Copilot and Perplexity subscriptions can't be called from other apps (that needs
+a separate, pay-per-use API key). So the app hands the brief (or a PDF) to that AI's app with
+Android's share sheet, and the conversation runs on your subscription there. Records come back as
+a JSON block (`HealthBrief.EXTRACT_PROMPT` describes the format) that the app parses and merges.
+
+ChatGPT is the exception: [Sign in with ChatGPT](https://developers.openai.com/siwc) lets
+open-source apps use a Plus/Pro plan directly. After signing in (browser, PKCE, redirect to a
+one-shot listener on 127.0.0.1), "Ask here" streams the answer into the app through the Responses
+API, with follow-ups. That is the app's only use of the internet permission.
+
+## Scale details
+
+### How it differs from openScale
 
 | | openScale + openScale sync | Scale Sync |
 |---|---|---|
@@ -16,7 +44,7 @@ Built from [openScale](https://github.com/oliexdev/openScale)'s Xiaomi code (GPL
 | Health Connect | Separate app | Built in |
 | Socks / stepped off early | Weight only | Weight only, upgraded automatically if the impedance reading arrives a moment later |
 
-## What goes where
+### What goes where
 
 - **Health Connect:** weight, body fat, body water (kg), bone mass, lean body mass, BMR.
 - **Stays in the app (Export CSV):** impedance, BMI, muscle, visceral fat, protein. Health
@@ -37,7 +65,7 @@ integration). BMR always uses the Schofield (WHO) equation.
 Turn off Zepp Life's weight writing in Health Connect (App permissions → Zepp Life) so
 weigh-ins don't show up twice.
 
-## How it works
+### How it works
 
 - `core/MiScaleFrame.kt` parses the 13-byte frame the scale puts in its advertisement
   service data (UUID 0x181B), same layout as openScale's `parseLive13`.

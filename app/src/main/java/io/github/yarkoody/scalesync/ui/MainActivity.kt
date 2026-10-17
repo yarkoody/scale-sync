@@ -91,15 +91,16 @@ class MainActivity : ComponentActivity() {
                 else -> lightColorScheme()
             }
             MaterialTheme(colorScheme = colors) {
-                Scaffold { padding -> App(padding) }
+                HomeApp()
             }
         }
     }
 }
 
+/** The scale: live reading, pairing, profile and weigh-ins. */
 @SuppressLint("BatteryLife")
 @Composable
-private fun App(padding: PaddingValues) {
+fun BodyScreen(padding: PaddingValues) {
     val context = LocalContext.current
     val store = remember { Store(context) }
     val scope = rememberCoroutineScope()
@@ -149,7 +150,7 @@ private fun App(padding: PaddingValues) {
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { Text("Scale Sync", style = MaterialTheme.typography.headlineMedium) }
+        item { ScreenTitle("Body", "Xiaomi scale, saved to Health Connect") }
 
         item {
             LiveCard(live?.frame?.let { f ->
@@ -265,7 +266,7 @@ private fun LiveCard(frame: io.github.yarkoody.scalesync.core.MiScaleFrame?, pai
 }
 
 @Composable
-private fun SetupCard(title: String, body: String, button: String = "Allow", onClick: () -> Unit) {
+internal fun SetupCard(title: String, body: String, button: String = "Allow", onClick: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
