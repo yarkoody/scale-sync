@@ -39,7 +39,7 @@ enum class Coach(val title: String, val blurb: String, val ask: String) {
     ),
 }
 
-object ClaudeBrief {
+object HealthBrief {
 
     fun build(
         coach: Coach,
@@ -156,7 +156,7 @@ object ClaudeBrief {
         }
     }
 
-    /** Sent with an uploaded document, so Claude returns it in the app's import format. */
+    /** Sent with an uploaded document, so the AI returns it in the app's import format. */
     const val EXTRACT_PROMPT = """The attached file is one of my medical documents from my Israeli HMO (it may be in Hebrew). Extract it into JSON for my health app.
 
 Reply with ONE ```json block holding an object with any of these lists (leave out lists with nothing in them). Use English, dates as YYYY-MM-DD, and numbers as numbers. Do not include my name, ID number, address or phone number.

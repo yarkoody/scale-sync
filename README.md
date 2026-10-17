@@ -15,17 +15,23 @@ permission, so nothing leaves the phone unless you send it somewhere.
 - **Records:** blood tests over the years with ranges and trends, medications, history, open
   referrals, and the original PDFs. Israeli HMOs (Meuhedet, Clalit, Maccabi) have no patient
   API, so documents come in as PDFs: add one, send it to Claude, paste Claude's reply back.
-- **Claude:** pick a focus (weekly check-in, sleep coach, labs and longevity, body composition,
-  doctor visit prep), and send a compact brief of your data to the Claude app.
+- **Ask AI:** pick your assistant (Claude, ChatGPT, Gemini, Copilot, Perplexity) and a focus
+  (weekly check-in, sleep coach, labs and longevity, body composition, doctor visit prep), and
+  send a compact brief of your data to it.
 
 Wearable data comes from **Health Connect** (Google Health writes Fitbit data there).
 
-### Why Claude goes through the Claude app
+### Using your AI subscription
 
-A Claude Pro/Max subscription can't be called from other apps; that needs a separate, pay-per-use
-API key. So the app builds the brief and hands it (or a PDF) to the Claude app with Android's
-share sheet, and the conversation runs on your subscription. Records come back as a JSON block
-(`ClaudeBrief.EXTRACT_PROMPT` describes the format) that the app parses and merges.
+Claude, Gemini, Copilot and Perplexity subscriptions can't be called from other apps (that needs
+a separate, pay-per-use API key). So the app hands the brief (or a PDF) to that AI's app with
+Android's share sheet, and the conversation runs on your subscription there. Records come back as
+a JSON block (`HealthBrief.EXTRACT_PROMPT` describes the format) that the app parses and merges.
+
+ChatGPT is the exception: [Sign in with ChatGPT](https://developers.openai.com/siwc) lets
+open-source apps use a Plus/Pro plan directly. After signing in (browser, PKCE, redirect to a
+one-shot listener on 127.0.0.1), "Ask here" streams the answer into the app through the Responses
+API, with follow-ups. That is the app's only use of the internet permission.
 
 ## Scale details
 

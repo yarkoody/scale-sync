@@ -144,7 +144,7 @@ fun TodayScreen(
         item {
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onAsk(Coach.CHECK_IN) }) { Text("Weekly check-in with Claude") }
+                Button(onClick = { onAsk(Coach.CHECK_IN) }) { Text("Weekly check-in with ${state.assistant.label}") }
                 OutlinedButton(onClick = { onAsk(Coach.LABS) }) { Text("Labs") }
             }
         }

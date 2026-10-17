@@ -20,6 +20,9 @@ import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.PermissionController
 import io.github.yarkoody.scalesync.health.HealthConnectReader
 import io.github.yarkoody.scalesync.health.HealthConnectWriter
+import io.github.yarkoody.scalesync.ai.ChatGptAuth
+import io.github.yarkoody.scalesync.insights.Assistant
+import io.github.yarkoody.scalesync.insights.AssistantShare
 import io.github.yarkoody.scalesync.insights.Coach
 import io.github.yarkoody.scalesync.medical.Document
 import io.github.yarkoody.scalesync.medical.MedicalRecord
@@ -34,7 +37,7 @@ enum class Tab(val label: String, val icon: String) {
     SLEEP("Sleep", "☾"),
     BODY("Body", "⚖"),
     RECORDS("Records", "✚"),
-    CLAUDE("Claude", "✦"),
+    AI("Ask AI", "✦"),
 }
 
 /** Data shared by the tabs: Health Connect readings, the medical record and uploaded documents. */
@@ -47,6 +50,17 @@ class HubState(private val app: Context) {
     var readGranted by mutableStateOf(false)
     var medical by mutableStateOf(MedicalRecord())
     var documents by mutableStateOf(emptyList<Document>())
+    var assistant by mutableStateOf(AssistantShare.selected(app))
+        private set
+
+    init {
+        ChatGptAuth.init(app)
+    }
+
+    fun selectAssistant(a: Assistant) {
+        AssistantShare.select(app, a)
+        assistant = a
+    }
 
     suspend fun refreshWellness() {
         loading = true
@@ -79,7 +93,7 @@ fun HomeApp() {
         scope.launch { state.refreshWellness() }
     }
     val connect = { hcLauncher.launch(HealthConnectReader.PERMISSIONS + HealthConnectWriter.PERMISSIONS) }
-    val ask = { c: Coach -> coach = c; tab = Tab.CLAUDE }
+    val ask = { c: Coach -> coach = c; tab = Tab.AI }
 
     LaunchedEffect(Unit) {
         state.refreshMedical()
@@ -108,7 +122,7 @@ fun HomeApp() {
             Tab.SLEEP -> SleepScreen(padding, state, connect, ask)
             Tab.BODY -> BodyScreen(padding)
             Tab.RECORDS -> RecordsScreen(padding, state, ask)
-            Tab.CLAUDE -> AskClaudeScreen(padding, state, coach) { coach = it }
+            Tab.AI -> AskAiScreen(padding, state, coach) { coach = it }
         }
     }
 }

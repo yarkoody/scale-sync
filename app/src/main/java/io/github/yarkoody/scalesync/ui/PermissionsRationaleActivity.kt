@@ -21,9 +21,10 @@ class PermissionsRationaleActivity : ComponentActivity() {
                     Text(
                         "My Health reads your Xiaomi scale over Bluetooth and writes the weigh-ins to " +
                             "Health Connect. It reads sleep, heart rate, HRV, steps, oxygen, breathing rate and " +
-                            "weight from Health Connect to show them in one place. It has no internet access: your " +
-                            "data and medical documents stay on this phone, and only leave it when you choose to " +
-                            "send something to another app, such as Claude.",
+                            "weight from Health Connect to show them in one place. Your data and medical documents " +
+                            "stay on this phone. They only leave it when you choose to send something to an AI app " +
+                            "such as Claude, ChatGPT or Gemini, or, if you signed in with ChatGPT, when you tap " +
+                            "Ask here, which sends that summary to OpenAI on your ChatGPT plan.",
                         modifier = Modifier.padding(top = 12.dp),
                     )
                 }

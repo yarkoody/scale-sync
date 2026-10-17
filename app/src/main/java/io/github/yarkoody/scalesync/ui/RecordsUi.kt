@@ -48,8 +48,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
-import io.github.yarkoody.scalesync.insights.ClaudeBrief
-import io.github.yarkoody.scalesync.insights.ClaudeShare
+import io.github.yarkoody.scalesync.insights.AssistantShare
+import io.github.yarkoody.scalesync.insights.HealthBrief
 import io.github.yarkoody.scalesync.insights.Coach
 import io.github.yarkoody.scalesync.medical.Document
 import io.github.yarkoody.scalesync.medical.Flag
@@ -75,6 +75,7 @@ fun RecordsScreen(padding: PaddingValues, state: HubState, onAsk: (Coach) -> Uni
     var section by rememberSaveable { mutableStateOf(Section.OVERVIEW) }
     var pasteOpen by remember { mutableStateOf(false) }
     var pendingDoc by remember { mutableStateOf<Uri?>(null) }
+    val ai = state.assistant.label
 
     fun importText(text: String) {
         scope.launch {
@@ -114,7 +115,7 @@ fun RecordsScreen(padding: PaddingValues, state: HubState, onAsk: (Coach) -> Uni
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { pickDoc.launch(arrayOf("application/pdf", "image/*")) }) { Text("Add document") }
-                OutlinedButton(onClick = { pasteOpen = true }) { Text("Paste from Claude") }
+                OutlinedButton(onClick = { pasteOpen = true }) { Text("Paste from $ai") }
             }
         }
 
@@ -126,8 +127,8 @@ fun RecordsScreen(padding: PaddingValues, state: HubState, onAsk: (Coach) -> Uni
                         "Meuhedet, Clalit and Maccabi have no patient API, so records come from the PDFs you download " +
                             "from their app or site.\n\n" +
                             "1. Add document: pick the PDF. It's kept here.\n" +
-                            "2. Send it to Claude: the Claude app reads it on your subscription and replies with a data block.\n" +
-                            "3. Copy Claude's reply and tap Paste from Claude.\n\n" +
+                            "2. Send it to $ai: the $ai app reads it on your subscription and replies with a data block.\n" +
+                            "3. Copy the reply and tap Paste from $ai.\n\n" +
                             "Already have a data file (health-record.json)? Import it.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -149,7 +150,7 @@ fun RecordsScreen(padding: PaddingValues, state: HubState, onAsk: (Coach) -> Uni
                 }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { onAsk(Coach.LABS) }) { Text("Review labs with Claude") }
+                        OutlinedButton(onClick = { onAsk(Coach.LABS) }) { Text("Review labs with $ai") }
                         OutlinedButton(onClick = { onAsk(Coach.VISIT) }) { Text("Visit prep") }
                     }
                 }
@@ -211,10 +212,10 @@ fun RecordsScreen(padding: PaddingValues, state: HubState, onAsk: (Coach) -> Uni
                         "prescriptions, imaging reports and letters.", style = MaterialTheme.typography.bodyMedium)
                 }
                 items(docs, key = { it.id }) { doc ->
-                    DocumentRow(doc,
+                    DocumentRow(doc, ai,
                         onOpen = { openDoc(context, store.fileOf(doc), doc.mime) },
                         onSend = {
-                            ClaudeShare.sendFile(context, store.fileOf(doc), doc.mime, ClaudeBrief.EXTRACT_PROMPT)
+                            AssistantShare.sendFile(context, state.assistant, store.fileOf(doc), doc.mime, HealthBrief.EXTRACT_PROMPT)
                             scope.launch {
                                 withContext(Dispatchers.IO) { store.update(doc.copy(imported = true)) }
                                 state.refreshMedical()
@@ -237,7 +238,7 @@ fun RecordsScreen(padding: PaddingValues, state: HubState, onAsk: (Coach) -> Uni
         item { Spacer(Modifier.height(24.dp)) }
     }
 
-    if (pasteOpen) PasteDialog(onDismiss = { pasteOpen = false }) { text -> pasteOpen = false; importText(text) }
+    if (pasteOpen) PasteDialog(ai, onDismiss = { pasteOpen = false }) { text -> pasteOpen = false; importText(text) }
 
     pendingDoc?.let { uri ->
         AddDocumentDialog(onDismiss = { pendingDoc = null }) { kind, date ->
@@ -247,7 +248,7 @@ fun RecordsScreen(padding: PaddingValues, state: HubState, onAsk: (Coach) -> Uni
                 state.refreshMedical()
                 section = Section.DOCS
                 if (doc == null) Toast.makeText(context, "Couldn't copy that file", Toast.LENGTH_LONG).show()
-                else Toast.makeText(context, "Saved. Tap Send to Claude to read it into your record.", Toast.LENGTH_LONG).show()
+                else Toast.makeText(context, "Saved. Tap Send to $ai to read it into your record.", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -322,16 +323,16 @@ private fun LabSparkline(hist: List<LabResult>) {
 }
 
 @Composable
-private fun DocumentRow(doc: Document, onOpen: () -> Unit, onSend: () -> Unit, onDelete: () -> Unit) {
+private fun DocumentRow(doc: Document, ai: String, onOpen: () -> Unit, onSend: () -> Unit, onDelete: () -> Unit) {
     var confirm by remember { mutableStateOf(false) }
     ElevatedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(doc.title, style = MaterialTheme.typography.titleSmall)
-            Text("${doc.kind} · ${doc.date?.format(DATE) ?: ""}" + if (doc.imported) " · sent to Claude" else "",
+            Text("${doc.kind} · ${doc.date?.format(DATE) ?: ""}" + if (doc.imported) " · sent to AI" else "",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row {
                 TextButton(onClick = onOpen) { Text("Open") }
-                TextButton(onClick = onSend) { Text(if (doc.imported) "Send again" else "Send to Claude") }
+                TextButton(onClick = onSend) { Text(if (doc.imported) "Send again" else "Send to $ai") }
                 TextButton(onClick = { confirm = true }) { Text("Delete") }
             }
         }
@@ -371,19 +372,19 @@ private fun AddDocumentDialog(onDismiss: () -> Unit, onSave: (String, LocalDate?
 }
 
 @Composable
-private fun PasteDialog(onDismiss: () -> Unit, onImport: (String) -> Unit) {
+private fun PasteDialog(ai: String, onDismiss: () -> Unit, onImport: (String) -> Unit) {
     val context = LocalContext.current
-    var text by remember { mutableStateOf(ClaudeShare.clipboardText(context)) }
+    var text by remember { mutableStateOf(AssistantShare.clipboardText(context)) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Paste from Claude") },
+        title = { Text("Paste from $ai") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Copy Claude's whole reply (the part with the ```json block is enough) and paste it here. " +
+                Text("Copy $ai's whole reply (the part with the ```json block is enough) and paste it here. " +
                     "New entries are added; ones already here are updated.", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(text, { text = it }, modifier = Modifier.fillMaxWidth().height(200.dp),
                     placeholder = { Text("{ \"labs\": [ … ] }") })
-                TextButton(onClick = { text = ClaudeShare.clipboardText(context) }) { Text("Paste from clipboard") }
+                TextButton(onClick = { text = AssistantShare.clipboardText(context) }) { Text("Paste from clipboard") }
             }
         },
         confirmButton = { TextButton(onClick = { onImport(text) }, enabled = text.isNotBlank()) { Text("Import") } },
