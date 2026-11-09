@@ -24,16 +24,24 @@ REVIEW_WORKFLOW="${REVIEW_WORKFLOW:-Claude PR review}"
 # merge-with-main commits that "Update branch" or the conflict agent add, and
 # lower branches merged upward, don't hide the stack. (Comparing branch tips
 # did: after "Update branch" no tip is an ancestor of another.)
+#
+# Fails closed: if GitHub can't be asked (rate limit, 5xx, a PR closed
+# meanwhile), it prints "unknown" and the gate leaves this PR for the next run
+# instead of aborting the whole gate or merging without knowing.
 own_commits() {
-  gh api "repos/{owner}/{repo}/pulls/$1/commits?per_page=100" \
-    --jq '.[] | select(.parents | length == 1) | .sha' | sort -u
+  # --paginate: a PR with more than 100 commits must not hide part of a stack.
+  local out
+  out=$(gh api --paginate "repos/{owner}/{repo}/pulls/$1/commits?per_page=100" \
+    --jq '.[] | select(.parents | length == 1) | .sha' 2>/dev/null) || return 1
+  sort -u <<<"$out"
 }
 stacked_on() {
-  local pr=$1 mine theirs other n best="" best_n=0
-  mine=$(own_commits "$pr")
-  for other in $(gh pr list --state open --json number --jq '.[].number'); do
+  local pr=$1 mine theirs other others n best="" best_n=0
+  mine=$(own_commits "$pr") || { echo unknown; return; }
+  others=$(gh pr list --state open --json number --jq '.[].number' 2>/dev/null) || { echo unknown; return; }
+  for other in $others; do
     [ "$other" != "$pr" ] || continue
-    theirs=$(own_commits "$other")
+    theirs=$(own_commits "$other") || { echo unknown; return; }
     [ -n "$theirs" ] || continue
     # every commit of theirs is in mine (nothing only in theirs) ...
     [ -z "$(comm -23 <(echo "$theirs") <(echo "$mine"))" ] || continue
@@ -81,6 +89,10 @@ for pr in $candidates; do
   fi
 
   below=$(stacked_on "$pr")
+  if [ "$below" = "unknown" ]; then
+    echo "#$pr: couldn't read the PR commits from GitHub; trying again next run" >&2
+    continue
+  fi
   if [ -n "$below" ]; then
     echo "#$pr: stacked on open PR #$below; waiting for it to merge first" >&2
     continue
