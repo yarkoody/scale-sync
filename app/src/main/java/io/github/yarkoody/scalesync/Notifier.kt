@@ -33,6 +33,7 @@ object Notifier {
         val text = when {
             !synced -> "Saved in Scale Sync. It will keep retrying Health Connect automatically."
             m.hasComposition -> "Sent to Health Connect with body composition."
+            !w.driver.capabilities.hasImpedance -> "Sent to Health Connect."
             m.impedance == null -> "Weight only (no impedance: weigh barefoot and stay on until it finishes)."
             else -> "Sent to Health Connect. Add your profile in the app for body composition."
         }

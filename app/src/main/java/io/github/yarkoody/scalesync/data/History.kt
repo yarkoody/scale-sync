@@ -2,6 +2,8 @@ package io.github.yarkoody.scalesync.data
 
 import android.content.Context
 import io.github.yarkoody.scalesync.core.BodyMetrics
+import io.github.yarkoody.scalesync.core.Drivers
+import io.github.yarkoody.scalesync.core.ScaleDriver
 import java.io.File
 import java.time.Instant
 import java.time.ZoneId
@@ -13,8 +15,11 @@ data class WeighIn(
     val version: Long,
     val metrics: BodyMetrics,
     val syncedToHealthConnect: Boolean,
+    /** [ScaleDriver.id] of the scale that measured it. */
+    val driverId: String = Drivers.legacyDefault.id,
 ) {
     val time: Instant get() = Instant.ofEpochMilli(sessionId)
+    val driver: ScaleDriver get() = Drivers.byId(driverId) ?: Drivers.legacyDefault
 }
 
 /**
@@ -60,7 +65,7 @@ class History(context: Context) {
             DATE.format(w.time), w.sessionId.toString(), w.version.toString(),
             f(m.weightKg), m.impedance?.toString() ?: "", f(m.bmi), f(m.fatPercent), f(m.waterPercent),
             f(m.musclePercent), f(m.boneKg), f(m.leanKg), f(m.visceralFat), f(m.proteinPercent),
-            f(m.bmrKcal), if (w.syncedToHealthConnect) "1" else "0",
+            f(m.bmrKcal), if (w.syncedToHealthConnect) "1" else "0", w.driverId,
         ).joinToString(",")
     }
 
@@ -76,12 +81,14 @@ class History(context: Context) {
                 boneKg = f(9), leanKg = f(10), visceralFat = f(11), proteinPercent = f(12), bmrKcal = f(13),
             ),
             syncedToHealthConnect = c[14] == "1",
+            // Rows written before drivers existed have no scale column; they came from a Mi BCS.
+            driverId = c.getOrNull(15)?.takeIf { it.isNotEmpty() } ?: Drivers.legacyDefault.id,
         )
     }.getOrNull()
 
     private companion object {
         const val HEADER = "time,session_id,version,weight_kg,impedance_ohm,bmi,body_fat_pct,water_pct," +
-            "muscle_pct,bone_kg,lean_kg,visceral_fat,protein_pct,bmr_kcal,synced_health_connect"
+            "muscle_pct,bone_kg,lean_kg,visceral_fat,protein_pct,bmr_kcal,synced_health_connect,scale"
         val DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault())
     }
 }

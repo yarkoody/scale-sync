@@ -61,10 +61,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.health.connect.client.PermissionController
+import io.github.yarkoody.scalesync.LiveReading
 import io.github.yarkoody.scalesync.Processor
 import io.github.yarkoody.scalesync.ble.ScaleScanner
 import io.github.yarkoody.scalesync.core.Algorithm
 import io.github.yarkoody.scalesync.core.Profile
+import io.github.yarkoody.scalesync.core.ScaleDriver
 import io.github.yarkoody.scalesync.core.Sex
 import io.github.yarkoody.scalesync.data.History
 import io.github.yarkoody.scalesync.data.Store
@@ -106,6 +108,7 @@ private fun App(padding: PaddingValues) {
 
     var profile by remember { mutableStateOf(store.profile) }
     var address by remember { mutableStateOf(store.scaleAddress) }
+    var driver by remember { mutableStateOf(store.driver) }
     var btGranted by remember { mutableStateOf(ScaleScanner.hasPermissions(context)) }
     var hcGranted by remember { mutableStateOf(emptySet<String>()) }
     val hcAvailable = remember { HealthConnectWriter.isAvailable(context) }
@@ -138,7 +141,7 @@ private fun App(padding: PaddingValues) {
         if (btGranted && a != null) {
             ScaleScanner.startBackground(context, a)
             cb = ScaleScanner.startForeground(context, a) { r ->
-                scope.launch(Dispatchers.IO) { Processor.onServiceData(context, ScaleScanner.serviceData(r)) }
+                scope.launch(Dispatchers.IO) { Processor.onAdvertisement(context, ScaleScanner.toAdvertisement(r)) }
             }
         }
         onDispose { ScaleScanner.stopForeground(context, cb) }
@@ -152,10 +155,7 @@ private fun App(padding: PaddingValues) {
         item { Text("Scale Sync", style = MaterialTheme.typography.headlineMedium) }
 
         item {
-            LiveCard(live?.frame?.let { f ->
-                val age = (System.currentTimeMillis() - (live?.atMs ?: 0)) / 1000
-                if (age > 60) null else f
-            }, address != null)
+            LiveCard(live?.takeIf { (System.currentTimeMillis() - it.atMs) / 1000 <= 60 }, driver)
         }
 
         message?.let { item { Text(it, color = MaterialTheme.colorScheme.primary) } }
@@ -169,8 +169,10 @@ private fun App(padding: PaddingValues) {
         }
 
         if (btGranted && address == null) item {
-            PairCard { picked ->
+            PairCard { picked, pickedDriver ->
                 store.scaleAddress = picked
+                store.driver = pickedDriver
+                driver = pickedDriver
                 address = picked
             }
         }
@@ -230,33 +232,40 @@ private fun App(padding: PaddingValues) {
                 Text("Profile: ${p.heightCm.toInt()} cm, born ${p.birthDate.format(BIRTH_FORMAT)}, ${p.sex.name.lowercase()}, " +
                     "${if (p.algorithm == Algorithm.XIAOMI) "Zepp Life formulas" else "bodymiscale formulas"}",
                     style = MaterialTheme.typography.bodySmall)
-                Row {
-                    TextButton(onClick = { editing = true }) { Text("Edit profile") }
-                    if (address != null) TextButton(onClick = {
-                        ScaleScanner.stopBackground(context)
-                        store.scaleAddress = null; address = null
-                    }) { Text("Forget scale") }
-                }
+                TextButton(onClick = { editing = true }) { Text("Edit profile") }
+            }
+        }
+
+        val paired = driver
+        if (address != null && paired != null) item {
+            PairedScaleRow(paired) {
+                ScaleScanner.stopBackground(context)
+                store.scaleAddress = null; store.driver = null
+                address = null; driver = null
             }
         }
     }
 }
 
 @Composable
-private fun LiveCard(frame: io.github.yarkoody.scalesync.core.MiScaleFrame?, paired: Boolean) {
+private fun LiveCard(reading: LiveReading?, driver: ScaleDriver?) {
+    val frame = reading?.frame
+    val paired = driver != null
+    val measuresComposition = driver?.capabilities?.hasImpedance == true
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             if (frame == null) {
                 Text(if (paired) "Step on the scale" else "Pair your scale below",
                     style = MaterialTheme.typography.titleMedium)
-                if (paired) Text("Barefoot, and stay on until it finishes, for body composition.",
+                if (measuresComposition) Text("Barefoot, and stay on until it finishes, for body composition.",
                     style = MaterialTheme.typography.bodySmall)
             } else {
                 Text(String.format(Locale.US, "%.2f kg", frame.weightKg), fontSize = 48.sp, fontWeight = FontWeight.Bold)
                 Text(when {
                     frame.removed -> "Done"
                     frame.impedance != null -> "Measured. Saving…"
-                    frame.stable -> "Measuring body composition…"
+                    frame.stable == true && measuresComposition -> "Measuring body composition…"
+                    frame.stable == true -> "Measured. Saving…"
                     else -> "Weighing…"
                 })
             }
@@ -271,34 +280,6 @@ private fun SetupCard(title: String, body: String, button: String = "Allow", onC
             Text(title, style = MaterialTheme.typography.titleMedium)
             Text(body, style = MaterialTheme.typography.bodyMedium)
             Button(onClick = onClick) { Text(button) }
-        }
-    }
-}
-
-@Composable
-private fun PairCard(onPicked: (String) -> Unit) {
-    val context = LocalContext.current
-    val found = remember { mutableStateListOf<Pair<String, String>>() }
-    DisposableEffect(Unit) {
-        val cb = ScaleScanner.startForeground(context, null) { r ->
-            if (ScaleScanner.isMiScale(r) && found.none { it.first == r.device.address }) {
-                val name = r.scanRecord?.deviceName ?: "Mi scale"
-                found.add(r.device.address to name)
-            }
-        }
-        onDispose { ScaleScanner.stopForeground(context, cb) }
-    }
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Pair your scale", style = MaterialTheme.typography.titleMedium)
-            Text("Tap the scale with your foot to wake it up. It will show up here.",
-                style = MaterialTheme.typography.bodyMedium)
-            if (found.isEmpty()) Text("Looking…", style = MaterialTheme.typography.bodySmall)
-            found.forEach { (addr, name) ->
-                OutlinedButton(onClick = { onPicked(addr) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("$name  ($addr)")
-                }
-            }
         }
     }
 }

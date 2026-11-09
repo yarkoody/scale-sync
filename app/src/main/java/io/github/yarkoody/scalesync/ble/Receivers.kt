@@ -30,7 +30,7 @@ class ScanResultReceiver : BroadcastReceiver() {
         val pending = goAsync()
         receiverScope.launch {
             try {
-                results.forEach { Processor.onServiceData(context.applicationContext, ScaleScanner.serviceData(it)) }
+                results.forEach { Processor.onAdvertisement(context.applicationContext, ScaleScanner.toAdvertisement(it)) }
             } finally {
                 pending.finish()
             }

@@ -21,14 +21,15 @@ import java.time.LocalDateTime
  * Layout: [ctrl0][ctrl1][yearLE(2)][mon][day][h][m][s][impedanceLE(2)][weightLE(2)]
  */
 data class MiScaleFrame(
-    val weightKg: Float,
+    override val weightKg: Float,
     /** Ohms, or null when the frame carries no impedance (still measuring, or shoes/socks). */
-    val impedance: Int?,
-    val stable: Boolean,
-    val removed: Boolean,
+    override val impedance: Int?,
+    override val stable: Boolean,
+    override val removed: Boolean,
     /** The scale's own clock, local time. Null if it is clearly unset. */
-    val scaleTime: LocalDateTime?,
-) {
+    override val scaleTime: LocalDateTime?,
+    override val unit: WeightUnit = WeightUnit.KG,
+) : ScaleFrame {
     companion object {
         const val SERVICE_DATA_UUID_16 = 0x181B
         private const val LBS_TO_KG = 0.45359237f
@@ -62,7 +63,12 @@ data class MiScaleFrame(
                 )
             }.getOrNull()?.takeIf { it.year >= 2020 }
 
-            return MiScaleFrame(weightKg, impedance, stable, removed, scaleTime)
+            val unit = when {
+                isLbs -> WeightUnit.LB
+                isCatty -> WeightUnit.JIN
+                else -> WeightUnit.KG
+            }
+            return MiScaleFrame(weightKg, impedance, stable, removed, scaleTime, unit)
         }
 
         private fun u16(d: ByteArray, i: Int) =

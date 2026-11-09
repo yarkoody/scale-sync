@@ -5,9 +5,13 @@ import android.util.Log
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import io.github.yarkoody.scalesync.core.Advertisement
 import io.github.yarkoody.scalesync.core.BodyComposition
-import io.github.yarkoody.scalesync.core.MiScaleFrame
+import io.github.yarkoody.scalesync.core.Drivers
+import io.github.yarkoody.scalesync.core.ScaleDriver
+import io.github.yarkoody.scalesync.core.ScaleFrame
 import io.github.yarkoody.scalesync.core.WeighInDetector
+import io.github.yarkoody.scalesync.data.Diagnostics
 import io.github.yarkoody.scalesync.data.History
 import io.github.yarkoody.scalesync.data.Store
 import io.github.yarkoody.scalesync.data.WeighIn
@@ -19,9 +23,9 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 
-data class LiveReading(val frame: MiScaleFrame, val atMs: Long)
+data class LiveReading(val frame: ScaleFrame, val driver: ScaleDriver, val atMs: Long)
 
-/** Single entry point for every frame, from the background scan and the in-app scan alike. */
+/** Single entry point for every advertisement, from the background scan and the in-app scan alike. */
 object Processor {
     private const val TAG = "ScaleSync"
     private const val COMMIT_WORK = "commit-weight-only"
@@ -33,14 +37,19 @@ object Processor {
     private val _historyVersion = MutableStateFlow(0)
     val historyVersion: StateFlow<Int> = _historyVersion
 
-    suspend fun onServiceData(context: Context, data: ByteArray?) {
-        val frame = MiScaleFrame.parse(data) ?: return
-        val now = System.currentTimeMillis()
-        _live.value = LiveReading(frame, now)
-
+    /** An advertisement from the paired scale (the scans are filtered to its address). */
+    suspend fun onAdvertisement(context: Context, ad: Advertisement) {
         val store = Store(context)
+        val driver = store.driver ?: return
+        Diagnostics.record(context, ad)
+        val frame = Drivers.parse(driver, ad) ?: return
+        val now = System.currentTimeMillis()
+        _live.value = LiveReading(frame, driver, now)
+
+        val delay = if (driver.capabilities.hasImpedance) WeighInDetector.WEIGHT_ONLY_DELAY_MS
+        else WeighInDetector.WEIGHT_ONLY_SCALE_DELAY_MS
         val action = synchronized(this) {
-            val (next, action) = WeighInDetector.onFrame(store.detector, frame, now, LocalDateTime.now())
+            val (next, action) = WeighInDetector.onFrame(store.detector, frame, now, LocalDateTime.now(), delay)
             store.detector = next
             action
         }
@@ -72,12 +81,16 @@ object Processor {
 
     private suspend fun save(context: Context, a: WeighInDetector.Action.Save) {
         if (a.impedance != null) WorkManager.getInstance(context).cancelUniqueWork(COMMIT_WORK)
+        val store = Store(context)
+        val driver = store.driver ?: Drivers.legacyDefault
         val date = Instant.ofEpochMilli(a.sessionId).atZone(ZoneId.systemDefault()).toLocalDate()
-        val metrics = BodyComposition.compute(a.weightKg, a.impedance, Store(context).profile, date)
+        val metrics = BodyComposition.compute(
+            a.weightKg, a.impedance, store.profile, date, driver.capabilities.vendorFormula,
+        )
         val history = History(context)
         val previous = history.all().find { it.sessionId == a.sessionId }
         val version = maxOf(a.version, (previous?.version ?: -1L) + 1)
-        val weighIn = WeighIn(a.sessionId, version, metrics, syncedToHealthConnect = false)
+        val weighIn = WeighIn(a.sessionId, version, metrics, syncedToHealthConnect = false, driverId = driver.id)
         history.upsert(weighIn)
         _historyVersion.value++
 
@@ -117,7 +130,9 @@ object Processor {
         val profile = Store(context).profile
         for (w in history.all()) {
             val date = w.time.atZone(ZoneId.systemDefault()).toLocalDate()
-            val metrics = BodyComposition.compute(w.metrics.weightKg, w.metrics.impedance, profile, date)
+            val metrics = BodyComposition.compute(
+                w.metrics.weightKg, w.metrics.impedance, profile, date, w.driver.capabilities.vendorFormula,
+            )
             history.upsert(w.copy(version = w.version + 1, metrics = metrics, syncedToHealthConnect = false))
         }
         _historyVersion.value++

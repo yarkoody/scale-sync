@@ -54,7 +54,21 @@ data class BodyMetrics(
 
 object BodyComposition {
 
-    fun compute(weightKg: Float, impedance: Int?, profile: Profile?, on: LocalDate): BodyMetrics {
+    /**
+     * What gets computed depends on what the scale sent:
+     * - impedance and a known vendor formula ([VendorFormula.XIAOMI]): full composition with the
+     *   profile's chosen formulas (Zepp Life or bodymiscale);
+     * - impedance but no known vendor formula: full composition with bodymiscale's formulas;
+     * - weight only: BMI and BMR (Schofield, from weight, height, age and sex) only. No body fat
+     *   is estimated, since without impedance it would be a guess from BMI.
+     */
+    fun compute(
+        weightKg: Float,
+        impedance: Int?,
+        profile: Profile?,
+        on: LocalDate,
+        vendorFormula: VendorFormula? = VendorFormula.XIAOMI,
+    ): BodyMetrics {
         if (profile == null) return BodyMetrics(weightKg, impedance, bmi = null)
         val age = profile.ageOn(on)
         val h = profile.heightCm
@@ -64,7 +78,8 @@ object BodyComposition {
         if (impedance == null) return BodyMetrics(weightKg, null, bmi, bmrKcal = bmr)
 
         val imp = impedance.toFloat()
-        return when (profile.algorithm) {
+        val algorithm = if (vendorFormula == VendorFormula.XIAOMI) profile.algorithm else Algorithm.SCIENCE
+        return when (algorithm) {
             Algorithm.XIAOMI -> {
                 val x = XiaomiLib(profile.sex, age, h)
                 val lean = x.lbm(weightKg, imp)
