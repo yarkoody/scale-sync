@@ -13,6 +13,7 @@ Built from [openScale](https://github.com/oliexdev/openScale)'s scale code (GPLv
 |---|---|---|---|
 | Xiaomi Mi Body Composition Scale 2 (XMTZC05HM) and Mi Body Composition Scale (XMTZC02HM) | `MIBFS` / `MIBCS` | weight, impedance → body composition | **Verified** |
 | Xiaomi Mi Smart Scale (XMTZC01HM) and Mi Smart Scale 2 (XMTZC04HM) | `MI_SCALE` / `MI SCALE2` | weight | Experimental |
+| OKOK / Chipsea broadcast scales (NIX Home, Xiaogui TZC4, MaxxMee QJ-J, BL-26L01, EB8217, …) | none, `Yoda0`/`Yoda1`, or `ADV` | weight | Experimental |
 
 **Verified** means tested on the real scale. **Experimental** means written from other
 projects' protocol notes and test captures, without the scale in hand: it should work, but if a
