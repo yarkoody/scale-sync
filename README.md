@@ -85,6 +85,21 @@ to the `latest` release). Without signing secrets each CI build gets a new debug
 updating means uninstalling first. To keep one key, add repository secrets
 `SIGNING_KEYSTORE_B64` (base64 of a keystore with alias `scalesync`) and `SIGNING_PASSWORD`.
 
+## Pull request agents
+
+Both run on Claude Sonnet 5.5 (`claude-sonnet-5-5`) through the Claude GitHub App and need the repository secret
+`CLAUDE_CODE_OAUTH_TOKEN` (run `claude setup-token` on a computer signed in to Claude).
+
+- **Claude PR review** (`.github/workflows/claude-review.yml`) reviews every non-draft PR on
+  each push, comments on the lines it has problems with, and submits "Request changes" or a
+  plain review comment.
+- **Claude merge agent** (`.github/workflows/claude-merge.yml`) acts only on PRs labelled
+  `automerge`. It merges `main` into a conflicting PR and resolves the conflicts; once CI is
+  green and the review on the latest commit was addressed, it approves and squash-merges.
+  Without the label it does nothing, so add the label when you want a PR merged for you.
+  Stacked PRs (a branch built on another open PR) wait until the PR below them is merged, so
+  you can label a whole stack at once and it merges bottom-up.
+
 ## License
 
 GPLv3, like openScale. `docs/PROVENANCE.md` lists which files are ported and from where.
