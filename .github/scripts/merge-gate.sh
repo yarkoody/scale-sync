@@ -15,6 +15,40 @@ LABEL="${LABEL:-automerge}"
 SELF_WORKFLOW="${SELF_WORKFLOW:-Claude merge agent}"
 REVIEW_WORKFLOW="${REVIEW_WORKFLOW:-Claude PR review}"
 
+# Stacked PRs: prints the number of another open PR that this one is built on
+# top of, or nothing. That PR must merge first, or its changes would land
+# squashed into this one.
+#
+# PR X sits on PR Y when every one of Y's own commits is also in X and X has
+# more. "Own commits" are the non-merge commits GitHub lists for the PR, so the
+# merge-with-main commits that "Update branch" or the conflict agent add, and
+# lower branches merged upward, don't hide the stack. (Comparing branch tips
+# did: after "Update branch" no tip is an ancestor of another.)
+own_commits() {
+  gh api "repos/{owner}/{repo}/pulls/$1/commits?per_page=100" \
+    --jq '.[] | select(.parents | length == 1) | .sha' | sort -u
+}
+stacked_on() {
+  local pr=$1 mine theirs other n best="" best_n=0
+  mine=$(own_commits "$pr")
+  for other in $(gh pr list --state open --json number --jq '.[].number'); do
+    [ "$other" != "$pr" ] || continue
+    theirs=$(own_commits "$other")
+    [ -n "$theirs" ] || continue
+    # every commit of theirs is in mine (nothing only in theirs) ...
+    [ -z "$(comm -23 <(echo "$theirs") <(echo "$mine"))" ] || continue
+    # ... and mine has commits theirs doesn't
+    [ -n "$(comm -13 <(echo "$theirs") <(echo "$mine"))" ] || continue
+    # report the PR directly below (the largest one contained)
+    n=$(echo "$theirs" | wc -l)
+    if [ "$n" -gt "$best_n" ]; then best=$other; best_n=$n; fi
+  done
+  echo "$best"
+}
+
+# Lets the self-test call stacked_on without running the gate.
+[ "${MERGE_GATE_SOURCE_ONLY:-}" = 1 ] && return 0 2>/dev/null
+
 if [ -n "${1:-}" ]; then
   candidates="$1"
 else
@@ -46,16 +80,7 @@ for pr in $candidates; do
     continue
   fi
 
-  # Stacked PRs: if this branch contains another open PR's head commit, it
-  # was built on top of that PR. Merge that one first, or its changes would
-  # land squashed into this PR instead.
-  head_sha=$(gh pr view "$pr" --json headRefOid --jq '.headRefOid')
-  below=""
-  while read -r other other_sha; do
-    [ -n "$other" ] && [ "$other" != "$pr" ] || continue
-    status=$(gh api "repos/{owner}/{repo}/compare/$other_sha...$head_sha" --jq '.status' 2>/dev/null || true)
-    if [ "$status" = "ahead" ]; then below="$other"; break; fi
-  done < <(gh pr list --state open --json number,headRefOid --jq '.[] | "\(.number) \(.headRefOid)"')
+  below=$(stacked_on "$pr")
   if [ -n "$below" ]; then
     echo "#$pr: stacked on open PR #$below; waiting for it to merge first" >&2
     continue
