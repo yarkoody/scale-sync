@@ -68,9 +68,30 @@ jobs:
           targets=$(bash .github/scripts/merge-gate.sh $pr)
           echo "targets=$targets" >> "$GITHUB_OUTPUT"
 
+  # claude-code-action doesn't run on push events ("Unsupported event type:
+  # push"). When main moves, hand each PR the gate picked to a
+  # workflow_dispatch run of this workflow, which the action does support.
+  # (workflow_dispatch is one of the events GITHUB_TOKEN may trigger.)
+  redispatch:
+    needs: gate
+    if: github.event_name == 'push' && needs.gate.outputs.targets != '[]' && needs.gate.outputs.targets != ''
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TARGETS: ${{ needs.gate.outputs.targets }}
+        run: |
+          for pr in $(jq -r '.[].pr' <<<"$TARGETS" | sort -u); do
+            gh workflow run claude-merge.yml --ref main -f pr="$pr"
+            echo "dispatched #$pr"
+          done
+
   agent:
     needs: gate
-    if: needs.gate.outputs.targets != '[]' && needs.gate.outputs.targets != ''
+    if: github.event_name != 'push' && needs.gate.outputs.targets != '[]' && needs.gate.outputs.targets != ''
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
