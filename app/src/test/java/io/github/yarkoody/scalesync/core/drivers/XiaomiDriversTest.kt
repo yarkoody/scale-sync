@@ -15,9 +15,12 @@ import java.time.LocalDateTime
  * Captures are real advertisements from the tests of Bluetooth-Devices/xiaomi-ble
  * (tests/test_parser.py: test_Xiaomi_Scale1*, test_Xiaomi_Scale2*), with their expected values.
  */
+// Device addresses are anonymised: each keeps its manufacturer prefix (first three bytes), the
+// device part is made up, and the same bytes inside the payloads were swapped to match (PICOOC
+// checksums recomputed). Weights and frame contents are otherwise as captured.
 class XiaomiDriversTest {
     private fun ad(uuid16: Int, hex: String, name: String? = null) = Advertisement(
-        address = "C4:DA:6C:00:B5:DC", name = name,
+        address = "C4:DA:6C:7A:5E:24", name = name,
         serviceData = mapOf(Advertisement.uuid16(uuid16) to hex.hexToBytes()),
         serviceUuids = listOf(Advertisement.uuid16(uuid16)),
     )
@@ -69,7 +72,7 @@ class XiaomiDriversTest {
 
     @Test
     fun v1_is_found_by_name_before_it_has_a_reading() {
-        val bare = Advertisement("C4:DA:6C:00:B5:DC", "MI SCALE2")
+        val bare = Advertisement("C4:DA:6C:7A:5E:24", "MI SCALE2")
         assertEquals(listOf(XiaomiMiScaleDriver), Drivers.matching(bare))
         assertNull(Drivers.parse(XiaomiMiScaleDriver, bare))
         assertEquals(listOf(XiaomiMiScaleDriver), Drivers.matching(Advertisement("x", "MI_SCALE")))
