@@ -9,8 +9,10 @@ of every ported file is tracked in `docs/PROVENANCE.md`.
 
 ## Current phase
 
-Multi-scale support on Android: driver layer first, then one scale family per PR. Each new
-driver ships as Experimental (the maintainer owns only a Mi Body Composition Scale 2).
+Multi-scale support on Android: milestones 1–5 are open PRs (merge in order). Next is hardware
+validation of milestone 1 on the Mi BCS 2, then collecting diagnostic captures from owners of
+the Experimental scales. Each new driver ships as Experimental (the maintainer owns only a Mi
+Body Composition Scale 2).
 
 ## Milestones
 
@@ -20,7 +22,7 @@ driver ships as Experimental (the maintainer owns only a Mi Body Composition Sca
 | 2 | Xiaomi Mi Scale v1 / Mi Smart Scale 2 | 0x181D 10-byte broadcast parsed, unit tests from captures | PR open |
 | 3 | OKOK / Chipsea | Manufacturer-data drivers with capture tests | PR open |
 | 4 | Eufy P3 / C20 / P2 | Broadcast weight with capture tests | PR open |
-| 5 | QN, Etekcity Fit 8S, PICOOC Mini Lite, AAA-series | Drivers with capture tests | Not started |
+| 5 | QN, Etekcity Fit 8S, PICOOC Mini Lite, AAA-series | Drivers with capture tests | PR open |
 | 6 | Xiaomi S400/S200 | Encrypted MiBeacon with a user-supplied bindkey | Later |
 | 7 | Google Play | Store listing, privacy policy, signed release | Later |
 
@@ -42,6 +44,10 @@ driver ships as Experimental (the maintainer owns only a Mi Body Composition Sca
 - Eufy C20/P3/P2 are weight-only from the broadcast; the C20/P3 bytes that look like impedance
   were never checked against the Eufy app, and the P2's impedance needs an authenticated
   connection. The C20/P3 clock is ignored (often unset), so frames are dated by receipt.
+- Every broadcast driver after the Mi BCS is weight-only: the bytes that look like impedance
+  (Etekcity, PICOOC, AAA, Eufy) were never compared with the vendor's app, so publishing them
+  would produce made-up body fat. Revisit per scale when an owner shares a capture plus the
+  app's numbers; a vendor formula would then go in `VendorFormula`.
 - Diagnostic capture: a rolling local file (256 KB cap) of raw advertisements from the paired
   scale, plus every nearby device while pairing; shared only via the share sheet.
 
@@ -56,6 +62,8 @@ driver ships as Experimental (the maintainer owns only a Mi Body Composition Sca
 
 ## Verification record
 
+- 2026-11-09 milestone 5: green (51 tests); no real capture is claimed by two drivers.
+
 - 2026-11-09 milestone 4: green (42 tests); Eufy captures from eufylife-ble-client issue logs.
 
 - 2026-11-09 milestone 3: green (37 tests); OKOK C0 and 2.0 captures from BLE Scale Sync's tests.
@@ -67,6 +75,6 @@ driver ships as Experimental (the maintainer owns only a Mi Body Composition Sca
 
 ## Next slice
 
-Milestone 5: QN broadcast (FITINDEX FT-26R-W and similar), Etekcity Fit 8S, PICOOC Mini Lite,
-AAA-series (BLE Scale Sync and openScale `QNHandlerBroadcast`, `EtekcityFit8SHandler`,
-`PicoocBroadcastHandler`, `AAAxHandler`).
+Run PR 1 on the phone with the Mi BCS 2 (pair, barefoot weigh-in, socks weigh-in, Share
+diagnostic capture) and record it here; then merge PRs 1–5 in order. After that: milestone 6
+(S400/S200 with bind key) or Play Store prep.
