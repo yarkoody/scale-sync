@@ -57,7 +57,7 @@ updating means uninstalling first. To keep one key, add repository secrets
 
 ## Pull request agents
 
-Both run on Claude Sonnet through the Claude GitHub App and need the repository secret
+Both run on Claude Sonnet 5.5 (`claude-sonnet-5-5`) through the Claude GitHub App and need the repository secret
 `CLAUDE_CODE_OAUTH_TOKEN` (run `claude setup-token` on a computer signed in to Claude).
 
 - **Claude PR review** (`.github/workflows/claude-review.yml`) reviews every non-draft PR on
@@ -67,6 +67,8 @@ Both run on Claude Sonnet through the Claude GitHub App and need the repository 
   `automerge`. It merges `main` into a conflicting PR and resolves the conflicts; once CI is
   green and the review on the latest commit was addressed, it approves and squash-merges.
   Without the label it does nothing, so add the label when you want a PR merged for you.
+  Stacked PRs (a branch built on another open PR) wait until the PR below them is merged, so
+  you can label a whole stack at once and it merges bottom-up.
 
 ## License
 

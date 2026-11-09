@@ -144,7 +144,7 @@ jobs:
               gh pr comment ${{ matrix.pr }} --body "<which files and why a person needs to choose>"
             Do not approve or merge.
           claude_args: |
-            --model sonnet
+            --model claude-sonnet-5-5
             --max-turns 60
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git fetch:*),Bash(git merge:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(grep:*),Bash(gh pr view ${{ matrix.pr }}:*),Bash(gh pr comment ${{ matrix.pr }}:*)"
 
@@ -178,7 +178,7 @@ jobs:
             than adding another):
               gh pr comment ${{ matrix.pr }} --edit-last --create-if-none --body "<what is still open>"
           claude_args: |
-            --model sonnet
+            --model claude-sonnet-5-5
             --max-turns 30
             --add-dir ${{ runner.temp }}
             --allowedTools "Read,Glob,Grep,Bash(gh pr view ${{ matrix.pr }}:*),Bash(gh pr diff ${{ matrix.pr }}:*),Bash(gh pr checks ${{ matrix.pr }}:*),Bash(gh pr review ${{ matrix.pr }} --approve:*),Bash(gh pr merge ${{ matrix.pr }} --squash:*),Bash(gh pr comment ${{ matrix.pr }}:*)"

@@ -46,6 +46,21 @@ for pr in $candidates; do
     continue
   fi
 
+  # Stacked PRs: if this branch contains another open PR's head commit, it
+  # was built on top of that PR. Merge that one first, or its changes would
+  # land squashed into this PR instead.
+  head_sha=$(gh pr view "$pr" --json headRefOid --jq '.headRefOid')
+  below=""
+  while read -r other other_sha; do
+    [ -n "$other" ] && [ "$other" != "$pr" ] || continue
+    status=$(gh api "repos/{owner}/{repo}/compare/$other_sha...$head_sha" --jq '.status' 2>/dev/null || true)
+    if [ "$status" = "ahead" ]; then below="$other"; break; fi
+  done < <(gh pr list --state open --json number,headRefOid --jq '.[] | "\(.number) \(.headRefOid)"')
+  if [ -n "$below" ]; then
+    echo "#$pr: stacked on open PR #$below; waiting for it to merge first" >&2
+    continue
+  fi
+
   checks=$(gh pr checks "$pr" --json workflow,bucket || true)
   checks=$(jq -c --arg self "$SELF_WORKFLOW" '[.[] | select(.workflow != $self)]' <<<"${checks:-[]}")
   if jq -e 'any(.[]; .bucket == "pending")' <<<"$checks" >/dev/null; then
