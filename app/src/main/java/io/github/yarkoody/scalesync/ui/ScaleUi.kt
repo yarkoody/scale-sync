@@ -21,6 +21,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -32,6 +33,8 @@ import io.github.yarkoody.scalesync.core.ScaleDriver
 import io.github.yarkoody.scalesync.core.ScaleFrame
 import io.github.yarkoody.scalesync.core.SupportLevel
 import io.github.yarkoody.scalesync.data.Diagnostics
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 /** A small "Experimental" tag for drivers nobody has tested on the real scale. */
@@ -64,10 +67,11 @@ fun PairCard(onPicked: (address: String, driver: ScaleDriver) -> Unit) {
     val context = LocalContext.current
     val found = remember { mutableStateMapOf<String, Candidate>() }
     val dismissed = remember { mutableStateListOf<String>() }
+    val scope = rememberCoroutineScope()
     DisposableEffect(Unit) {
         val cb = ScaleScanner.startForeground(context, null) { r ->
             val ad = ScaleScanner.toAdvertisement(r)
-            Diagnostics.record(context, ad)
+            scope.launch(Dispatchers.IO) { Diagnostics.record(context, ad) }
             val drivers = Drivers.matching(ad)
             if (drivers.isEmpty()) return@startForeground
             val frame = drivers.firstNotNullOfOrNull { Drivers.parse(it, ad) }?.takeIf { it.weightKg > 0f }
