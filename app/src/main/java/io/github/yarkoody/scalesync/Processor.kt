@@ -81,6 +81,8 @@ object Processor {
 
     private suspend fun save(context: Context, a: WeighInDetector.Action.Save) {
         if (a.impedance != null) WorkManager.getInstance(context).cancelUniqueWork(COMMIT_WORK)
+        // The user deleted this weigh-in (a late impedance reading for it must not bring it back).
+        if (History(context).isDeleted(a.sessionId)) return
         val store = Store(context)
         val driver = store.driver ?: Drivers.legacyDefault
         val date = Instant.ofEpochMilli(a.sessionId).atZone(ZoneId.systemDefault()).toLocalDate()
@@ -97,6 +99,8 @@ object Processor {
         val synced = runCatching { HealthConnectWriter.write(context, weighIn) }
             .onFailure { Log.w(TAG, "Health Connect write failed", it) }
             .getOrDefault(false)
+        // Deleted while it was being written: take the fresh records out again.
+        if (synced && history.isDeleted(a.sessionId)) { removeFromHealthConnect(context, a.sessionId); return }
         if (synced) {
             history.markSynced(a.sessionId)
             _historyVersion.value++
@@ -108,19 +112,47 @@ object Processor {
         Notifier.weighInSaved(context, weighIn, synced)
     }
 
+    /**
+     * Deletes a weigh-in here and from Health Connect. If Health Connect can't be reached now, the
+     * removal stays queued and is retried with the sync retries. Returns true if it is already
+     * gone from Health Connect too.
+     */
+    suspend fun deleteWeighIn(context: Context, sessionId: Long): Boolean {
+        val history = History(context)
+        history.delete(sessionId)
+        _historyVersion.value++
+        val removed = removeFromHealthConnect(context, sessionId)
+        if (!removed) SyncWorker.schedule(context)
+        return removed
+    }
+
+    private suspend fun removeFromHealthConnect(context: Context, sessionId: Long): Boolean {
+        val ok = runCatching { HealthConnectWriter.delete(context, sessionId) }
+            .onFailure { Log.w(TAG, "Health Connect delete failed", it) }
+            .getOrDefault(false)
+        if (ok) History(context).markRemovedFromHealthConnect(sessionId)
+        return ok
+    }
+
     /** Retries weigh-ins that could not be written to Health Connect (no permission yet, etc). */
     suspend fun retryUnsynced(context: Context): Int {
         val history = History(context)
+        // Deletions first, so nothing removed by the user is re-sent below.
+        var pendingRemovals = 0
+        for (id in history.pendingHealthConnectRemovals()) {
+            if (!removeFromHealthConnect(context, id)) pendingRemovals++
+        }
         var count = 0
         var failed = 0
         for (w in history.all().filterNot { it.syncedToHealthConnect }) {
             val ok = runCatching { HealthConnectWriter.write(context, w) }
                 .onFailure { Log.w(TAG, "Health Connect retry failed", it) }
                 .getOrDefault(false)
+            if (ok && history.isDeleted(w.sessionId)) { removeFromHealthConnect(context, w.sessionId); continue }
             if (ok) { history.markSynced(w.sessionId); count++ } else failed++
         }
         if (count > 0) _historyVersion.value++
-        if (failed > 0) SyncWorker.schedule(context)
+        if (failed > 0 || pendingRemovals > 0) SyncWorker.schedule(context)
         return count
     }
 

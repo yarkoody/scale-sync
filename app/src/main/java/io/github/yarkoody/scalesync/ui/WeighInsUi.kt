@@ -21,7 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -56,6 +59,7 @@ import com.composables.icons.lucide.Layers
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PersonStanding
 import com.composables.icons.lucide.Target
+import com.composables.icons.lucide.Trash
 import com.composables.icons.lucide.Zap
 import io.github.yarkoody.scalesync.core.BodyMetrics
 import io.github.yarkoody.scalesync.data.WeighIn
@@ -74,8 +78,9 @@ private fun num(v: Float, digits: Int = 1) = String.format(Locale.US, "%.${digit
  * older ones show weight and body fat and expand on tap.
  */
 @Composable
-fun WeighInCard(w: WeighIn, previous: WeighIn?, startExpanded: Boolean) {
+fun WeighInCard(w: WeighIn, previous: WeighIn?, startExpanded: Boolean, onDelete: () -> Unit) {
     var expanded by rememberSaveable(w.sessionId) { mutableStateOf(startExpanded) }
+    var confirmDelete by rememberSaveable(w.sessionId) { mutableStateOf(false) }
     val m = w.metrics
     Card(
         modifier = Modifier.fillMaxWidth().animateContentSize().clickable { expanded = !expanded },
@@ -121,8 +126,33 @@ fun WeighInCard(w: WeighIn, previous: WeighIn?, startExpanded: Boolean) {
                     Text("$it Ω", style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                if (expanded) {
+                    Spacer(Modifier.width(4.dp))
+                    IconButton(onClick = { confirmDelete = true }, modifier = Modifier.size(36.dp)) {
+                        Icon(Lucide.Trash, contentDescription = "Delete weigh-in", Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            icon = { Icon(Lucide.Trash, contentDescription = null) },
+            title = { Text("Delete this weigh-in?") },
+            text = {
+                Text("${num(m.weightKg, 2)} kg on ${DAY.format(w.time)} at ${CLOCK.format(w.time)}. " +
+                    "It's removed from Scale Sync and from Health Connect. This can't be undone.")
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; onDelete() }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+        )
     }
 }
 
