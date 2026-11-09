@@ -1,0 +1,80 @@
+# Scale Sync plan
+
+## Outcome
+
+Scale Sync reads many brands of BLE bathroom scale from their advertisements alone (no
+connection, no account, no internet permission) and writes weigh-ins to Health Connect, then
+ships on Google Play. An iPhone version comes later; it may need a non-GPL core, so the origin
+of every ported file is tracked in `docs/PROVENANCE.md`.
+
+## Current phase
+
+Multi-scale support on Android: milestones 1–5 are open PRs (merge in order). Next is hardware
+validation of milestone 1 on the Mi BCS 2, then collecting diagnostic captures from owners of
+the Experimental scales. Each new driver ships as Experimental (the maintainer owns only a Mi
+Body Composition Scale 2).
+
+## Milestones
+
+| # | Milestone | Exit condition (observable) | Status |
+|---|---|---|---|
+| 1 | Driver layer | `ScaleDriver` interface + registry; pairing auto-detects ("Found: X — is this yours?"); composition chosen by what arrived; diagnostic capture share; Experimental badge; all tests green | PR open |
+| 2 | Xiaomi Mi Scale v1 / Mi Smart Scale 2 | 0x181D 10-byte broadcast parsed, unit tests from captures | PR open |
+| 3 | OKOK / Chipsea | Manufacturer-data drivers with capture tests | PR open |
+| 4 | Eufy P3 / C20 / P2 | Broadcast weight with capture tests | PR open |
+| 5 | QN, Etekcity Fit 8S, PICOOC Mini Lite, AAA-series | Drivers with capture tests | PR open |
+| 6 | Xiaomi S400/S200 | Encrypted MiBeacon with a user-supplied bindkey | Later |
+| 7 | Google Play | Store listing, privacy policy, signed release | Later |
+
+## Decisions
+
+- Drivers live in pure-Kotlin `core/` and see an `Advertisement` value, not Android types, so
+  every driver is tested on the JVM from captured bytes.
+- Body composition by what the scale sent: impedance + known vendor formula (Xiaomi) → the
+  profile's formula; impedance, unknown vendor → bodymiscale; weight only → weight + BMR to
+  Health Connect, BMI in-app, no estimated body fat anywhere.
+- Scales without a stable flag count as stable after the weight holds within 0.1 kg for 2 s;
+  weight-only scales save 5 s after that (Mi BCS keeps its 20 s wait for impedance).
+- The history CSV gained a trailing `scale` column (driver id). Old rows default to the Mi BCS.
+- Each step is its own branch and PR against `main`; later PRs include earlier commits until
+  those merge, so merge in order.
+- OKOK/Chipsea is weight-only: the "r1" field other projects publish as impedance is a constant
+  on every captured unit (BLE Scale Sync's finding). Only the V20 and C0 dialects are read; V1.1
+  (0x11CA) and 0xF0FF have no captures with known weights.
+- Eufy C20/P3/P2 are weight-only from the broadcast; the C20/P3 bytes that look like impedance
+  were never checked against the Eufy app, and the P2's impedance needs an authenticated
+  connection. The C20/P3 clock is ignored (often unset), so frames are dated by receipt.
+- Every broadcast driver after the Mi BCS is weight-only: the bytes that look like impedance
+  (Etekcity, PICOOC, AAA, Eufy) were never compared with the vendor's app, so publishing them
+  would produce made-up body fat. Revisit per scale when an owner shares a capture plus the
+  app's numbers; a vendor formula would then go in `VendorFormula`.
+- Diagnostic capture: a rolling local file (256 KB cap) of raw advertisements from the paired
+  scale, plus every nearby device while pairing; shared only via the share sheet.
+
+## Risks
+
+- Experimental drivers are written from other projects' notes; a real scale may differ
+  (byte order, flags, unit). Mitigation: diagnostic capture and conservative `matches`.
+- Manufacturer-data drivers (OKOK, QN, ...) key on company ids that many unrelated devices
+  may also use; `matches` must check length and markers, not the id alone.
+- Background scans are address-filtered; a scale that rotates its address would stop waking
+  the app.
+
+## Verification record
+
+- 2026-11-09 milestone 5: green (51 tests); no real capture is claimed by two drivers.
+
+- 2026-11-09 milestone 4: green (42 tests); Eufy captures from eufylife-ble-client issue logs.
+
+- 2026-11-09 milestone 3: green (37 tests); OKOK C0 and 2.0 captures from BLE Scale Sync's tests.
+
+- 2026-11-09 milestone 2: green (30 tests); v1 and v2 captures from xiaomi-ble's test suite.
+
+- 2026-11-09 milestone 1: `./gradlew testDebugUnitTest assembleDebug` green (22 tests). Not yet
+  run on a phone with the Mi BCS 2.
+
+## Next slice
+
+Run PR 1 on the phone with the Mi BCS 2 (pair, barefoot weigh-in, socks weigh-in, Share
+diagnostic capture) and record it here; then merge PRs 1–5 in order. After that: milestone 6
+(S400/S200 with bind key) or Play Store prep.

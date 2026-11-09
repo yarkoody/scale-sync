@@ -12,17 +12,17 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.content.ContextCompat
+import io.github.yarkoody.scalesync.core.Advertisement
 
 /**
- * Reads the scale from its advertisements only. It never connects, so it works alongside
- * Zepp Life and picks up the weigh-in the moment the scale shows it.
+ * Reads the scale from its advertisements only. It never connects, so it works alongside the
+ * vendor's app and picks up the weigh-in the moment the scale shows it. Which bytes mean what is
+ * up to the scale's driver (see `core/Drivers.kt`).
  */
 object ScaleScanner {
     private const val TAG = "ScaleSync"
-    val SERVICE_UUID: ParcelUuid = ParcelUuid.fromString("0000181b-0000-1000-8000-00805f9b34fb")
 
     fun requiredPermissions(): Array<String> =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -38,15 +38,25 @@ object ScaleScanner {
     fun isBluetoothOn(context: Context): Boolean =
         context.getSystemService(BluetoothManager::class.java)?.adapter?.isEnabled == true
 
-    /** True for any advertisement from a Mi body composition scale. */
+    /** The plain-data form of [result] that drivers read. */
     @SuppressLint("MissingPermission")
-    fun isMiScale(result: ScanResult): Boolean {
-        val name = result.scanRecord?.deviceName ?: runCatching { result.device.name }.getOrNull() ?: ""
-        val data = result.scanRecord?.getServiceData(SERVICE_UUID)
-        return name.startsWith("MIBCS") || name.startsWith("MIBFS") || data?.size == 13
+    fun toAdvertisement(result: ScanResult): Advertisement {
+        val record = result.scanRecord
+        val name = record?.deviceName ?: runCatching { result.device.name }.getOrNull()
+        val mfr = buildMap {
+            val sparse = record?.manufacturerSpecificData
+            if (sparse != null) for (i in 0 until sparse.size()) put(sparse.keyAt(i), sparse.valueAt(i))
+        }
+        return Advertisement(
+            address = result.device.address,
+            name = name,
+            serviceData = record?.serviceData.orEmpty().mapKeys { it.key.uuid },
+            manufacturerData = mfr,
+            serviceUuids = record?.serviceUuids.orEmpty().map { it.uuid },
+            rssi = result.rssi,
+            raw = record?.bytes,
+        )
     }
-
-    fun serviceData(result: ScanResult): ByteArray? = result.scanRecord?.getServiceData(SERVICE_UUID)
 
     private fun backgroundIntent(context: Context): PendingIntent {
         val intent = Intent(context, ScanResultReceiver::class.java).setAction(ScanResultReceiver.ACTION)

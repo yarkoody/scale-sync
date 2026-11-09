@@ -3,6 +3,8 @@ package io.github.yarkoody.scalesync.data
 import android.content.Context
 import android.content.SharedPreferences
 import io.github.yarkoody.scalesync.core.Algorithm
+import io.github.yarkoody.scalesync.core.Drivers
+import io.github.yarkoody.scalesync.core.ScaleDriver
 import io.github.yarkoody.scalesync.core.Profile
 import io.github.yarkoody.scalesync.core.Sex
 import io.github.yarkoody.scalesync.core.WeighInDetector
@@ -44,6 +46,14 @@ class Store(context: Context) {
         get() = p.getString("scale_address", null)
         set(v) { p.edit().putString("scale_address", v).commit() }
 
+    /** Driver of the paired scale. Installs paired before drivers existed had a Mi BCS. */
+    var driver: ScaleDriver?
+        get() {
+            if (scaleAddress == null) return null
+            return Drivers.byId(p.getString("scale_driver", null)) ?: Drivers.legacyDefault
+        }
+        set(v) { p.edit().putString("scale_driver", v?.id).commit() }
+
     var detector: WeighInDetector.State
         get() = WeighInDetector.State(
             sessionId = p.getLong("d_session", 0L),
@@ -53,6 +63,9 @@ class Store(context: Context) {
             lastSavedHadImpedance = p.getBoolean("d_saved_imp", false),
             pendingWeight = p.getFloat("d_pending_w", 0f),
             pendingAtMs = p.getLong("d_pending_at", 0L),
+            rawWeight = p.getFloat("d_raw_w", 0f),
+            rawAtMs = p.getLong("d_raw_at", 0L),
+            steadySinceMs = p.getLong("d_steady_since", 0L),
         )
         set(s) {
             p.edit()
@@ -63,6 +76,9 @@ class Store(context: Context) {
                 .putBoolean("d_saved_imp", s.lastSavedHadImpedance)
                 .putFloat("d_pending_w", s.pendingWeight)
                 .putLong("d_pending_at", s.pendingAtMs)
+                .putFloat("d_raw_w", s.rawWeight)
+                .putLong("d_raw_at", s.rawAtMs)
+                .putLong("d_steady_since", s.steadySinceMs)
                 .commit()
         }
 }

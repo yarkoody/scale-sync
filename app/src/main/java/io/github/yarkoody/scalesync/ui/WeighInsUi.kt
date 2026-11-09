@@ -130,7 +130,7 @@ fun WeighInCard(w: WeighIn, previous: WeighIn?, startExpanded: Boolean) {
                 }
             } else {
                 Spacer(Modifier.height(12.dp))
-                MetricGrid(m)
+                MetricGrid(m, measuresComposition = w.driver.capabilities.hasImpedance)
             }
 
             Spacer(Modifier.height(10.dp))
@@ -206,11 +206,12 @@ private fun metrics(m: BodyMetrics): List<Metric> = listOfNotNull(
 )
 
 @Composable
-private fun MetricGrid(m: BodyMetrics) {
+private fun MetricGrid(m: BodyMetrics, measuresComposition: Boolean) {
     val items = metrics(m)
     if (m.impedance == null) {
         Text(
-            "Weight only. For body composition, weigh in barefoot and stay on until the scale finishes.",
+            if (measuresComposition) "Weight only. For body composition, weigh in barefoot and stay on until the scale finishes."
+            else "This scale measures weight only. BMI and BMR are worked out from your profile; body fat isn't guessed.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp),

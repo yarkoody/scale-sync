@@ -29,8 +29,6 @@ object HealthConnectWriter {
         HealthPermission.getWritePermission(BasalMetabolicRateRecord::class),
     )
 
-    private val SCALE = Device(type = Device.TYPE_SCALE, manufacturer = "Xiaomi", model = "Mi Body Composition Scale 2")
-
     fun isAvailable(context: Context): Boolean =
         HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE
 
@@ -39,7 +37,8 @@ object HealthConnectWriter {
         else HealthConnectClient.getOrCreate(context).permissionController.getGrantedPermissions()
 
     /**
-     * Writes every metric Health Connect has a type for, skipping types whose permission was not
+     * Writes every metric the weigh-in has and Health Connect has a type for (a weight-only scale
+     * gives weight and BMR; body fat is only written when it was computed from impedance), skipping types whose permission was not
      * granted. Records use client ids derived from the weigh-in session, so re-writing the same
      * weigh-in (for example weight-only first, then with impedance) replaces instead of duplicating.
      * Returns true if at least the weight was written.
@@ -51,7 +50,8 @@ object HealthConnectWriter {
         val time = w.time
         val zone = ZoneId.systemDefault().rules.getOffset(time)
         val m = w.metrics
-        fun meta(kind: String) = Metadata.autoRecorded(SCALE, "scalesync-$kind-${w.sessionId}", w.version)
+        val device = Device(type = Device.TYPE_SCALE, manufacturer = w.driver.manufacturer, model = w.driver.model)
+        fun meta(kind: String) = Metadata.autoRecorded(device, "scalesync-$kind-${w.sessionId}", w.version)
 
         val records = buildList<Record> {
             add(WeightRecord(time, zone, Mass.kilograms(m.weightKg.toDouble()), meta("weight")))
