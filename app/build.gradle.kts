@@ -31,7 +31,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Installs next to the release app, so trying a build never touches real history.
+            applicationIdSuffix = ".dev"
+            manifestPlaceholders["appLabel"] = "Scale Sync dev"
+        }
         release {
+            manifestPlaceholders["appLabel"] = "Scale Sync"
             isMinifyEnabled = false
             signingConfig = signingConfigs.findByName("personal") ?: signingConfigs.getByName("debug")
         }
@@ -54,6 +60,8 @@ dependencies {
     implementation(composeBom)
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
+    // Lucide outline icons for the body measurements (1.1.0 matches this Compose/Kotlin version).
+    implementation("com.composables:icons-lucide-android:1.1.0")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
