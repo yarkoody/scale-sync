@@ -19,7 +19,7 @@ driver ships as Experimental (the maintainer owns only a Mi Body Composition Sca
 | 1 | Driver layer | `ScaleDriver` interface + registry; pairing auto-detects ("Found: X — is this yours?"); composition chosen by what arrived; diagnostic capture share; Experimental badge; all tests green | PR open |
 | 2 | Xiaomi Mi Scale v1 / Mi Smart Scale 2 | 0x181D 10-byte broadcast parsed, unit tests from captures | PR open |
 | 3 | OKOK / Chipsea | Manufacturer-data drivers with capture tests | PR open |
-| 4 | Eufy P3 / C20 / P2 | Broadcast weight with capture tests | Not started |
+| 4 | Eufy P3 / C20 / P2 | Broadcast weight with capture tests | PR open |
 | 5 | QN, Etekcity Fit 8S, PICOOC Mini Lite, AAA-series | Drivers with capture tests | Not started |
 | 6 | Xiaomi S400/S200 | Encrypted MiBeacon with a user-supplied bindkey | Later |
 | 7 | Google Play | Store listing, privacy policy, signed release | Later |
@@ -39,6 +39,9 @@ driver ships as Experimental (the maintainer owns only a Mi Body Composition Sca
 - OKOK/Chipsea is weight-only: the "r1" field other projects publish as impedance is a constant
   on every captured unit (BLE Scale Sync's finding). Only the V20 and C0 dialects are read; V1.1
   (0x11CA) and 0xF0FF have no captures with known weights.
+- Eufy C20/P3/P2 are weight-only from the broadcast; the C20/P3 bytes that look like impedance
+  were never checked against the Eufy app, and the P2's impedance needs an authenticated
+  connection. The C20/P3 clock is ignored (often unset), so frames are dated by receipt.
 - Diagnostic capture: a rolling local file (256 KB cap) of raw advertisements from the paired
   scale, plus every nearby device while pairing; shared only via the share sheet.
 
@@ -53,6 +56,8 @@ driver ships as Experimental (the maintainer owns only a Mi Body Composition Sca
 
 ## Verification record
 
+- 2026-11-09 milestone 4: green (42 tests); Eufy captures from eufylife-ble-client issue logs.
+
 - 2026-11-09 milestone 3: green (37 tests); OKOK C0 and 2.0 captures from BLE Scale Sync's tests.
 
 - 2026-11-09 milestone 2: green (30 tests); v1 and v2 captures from xiaomi-ble's test suite.
@@ -62,5 +67,6 @@ driver ships as Experimental (the maintainer owns only a Mi Body Composition Sca
 
 ## Next slice
 
-Milestone 4: Eufy P3/C20 and P2 broadcast weight (BLE Scale Sync `eufy-c20-p3.ts`,
-`eufy-p2.ts`; openScale `EufyC20Handler`, `EufyP2Handler`).
+Milestone 5: QN broadcast (FITINDEX FT-26R-W and similar), Etekcity Fit 8S, PICOOC Mini Lite,
+AAA-series (BLE Scale Sync and openScale `QNHandlerBroadcast`, `EtekcityFit8SHandler`,
+`PicoocBroadcastHandler`, `AAAxHandler`).

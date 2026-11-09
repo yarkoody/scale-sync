@@ -1,5 +1,7 @@
 package io.github.yarkoody.scalesync.core
 
+import io.github.yarkoody.scalesync.core.drivers.EufyC20P3Driver
+import io.github.yarkoody.scalesync.core.drivers.EufyP2Driver
 import io.github.yarkoody.scalesync.core.drivers.OkokChipseaDriver
 import io.github.yarkoody.scalesync.core.drivers.XiaomiMiBcsDriver
 import io.github.yarkoody.scalesync.core.drivers.XiaomiMiScaleDriver
@@ -10,6 +12,8 @@ object Drivers {
         XiaomiMiBcsDriver,
         XiaomiMiScaleDriver,
         OkokChipseaDriver,
+        EufyC20P3Driver,
+        EufyP2Driver,
     )
 
     /** Used for installs paired before drivers existed: they could only pair a Mi BCS. */

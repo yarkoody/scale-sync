@@ -68,14 +68,11 @@ object OkokChipseaDriver : ScaleDriver {
         return x == d.u8(12)
     }
 
-    private fun ownAddress(ad: Advertisement): String? =
-        ad.address.replace(":", "").replace("-", "").uppercase().takeIf { it.length == 12 && it.all { c -> c.isDigit() || c in 'A'..'F' } }
-
     private fun echoed(d: ByteArray, offset: Int) = d.copyOfRange(offset, offset + 6).toHex().uppercase()
 
     /** The (company id, payload) entry this driver claims, if any. */
     private fun claimed(ad: Advertisement): Pair<Int, ByteArray>? {
-        val own = ownAddress(ad)
+        val own = ownAddressHex(ad)
         val name = ad.name?.trim()?.lowercase().orEmpty()
         val yoda = name.startsWith("yoda0") || name.startsWith("yoda1")
         for ((id, d) in ad.manufacturerData) {
