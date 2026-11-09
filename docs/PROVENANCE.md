@@ -21,6 +21,7 @@ source is noted next to each one in the test.
 | `core/BodyComposition.kt` | **ported** | `XiaomiLib` from openScale `MiScaleLib.kt` (itself from prototux/MIBCS-reverse-engineering); `ScienceLib` from openScale `BodyMiScaleLib.kt` (bodymiscale, dckiller51, GPLv3). `compute()` policy is original. |
 | `core/MiScaleFrame.kt` | **ported** | 13-byte layout from openScale `MiScaleHandler.parseLive13` and prototux/MIBCS-reverse-engineering. |
 | `core/drivers/XiaomiMiBcsDriver.kt` | **ported** | Name rules from openScale `MiScaleHandler.supportFor`. |
+| `core/drivers/XiaomiMiScaleDriver.kt` | **ported** | 10-byte layout from openScale `MiScaleHandler.parseHistory10`. The same layout is in Bluetooth-Devices/xiaomi-ble `_parse_scale_v1` (Apache-2.0), so a non-GPL rewrite has a permissive reference. |
 | `core/Advertisement.kt` | original | |
 | `core/ScaleDriver.kt` | original | |
 | `core/Drivers.kt` | original | |
@@ -34,4 +35,5 @@ source is noted next to each one in the test.
 | File | Origin |
 |---|---|
 | `core/BodyCompositionTest.kt` | reference values from openScale `MiScaleLibTest` / `BodyMiScaleLibTest` |
+| `core/drivers/XiaomiDriversTest.kt` | captures from Bluetooth-Devices/xiaomi-ble `tests/test_parser.py` (Apache-2.0); test code original |
 | `core/MiScaleFrameTest.kt`, `core/WeighInDetectorTest.kt`, `core/DriverLayerTest.kt`, `core/SteadyWeightTest.kt` | original |

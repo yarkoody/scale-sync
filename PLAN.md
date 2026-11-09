@@ -17,7 +17,7 @@ driver ships as Experimental (the maintainer owns only a Mi Body Composition Sca
 | # | Milestone | Exit condition (observable) | Status |
 |---|---|---|---|
 | 1 | Driver layer | `ScaleDriver` interface + registry; pairing auto-detects ("Found: X — is this yours?"); composition chosen by what arrived; diagnostic capture share; Experimental badge; all tests green | PR open |
-| 2 | Xiaomi Mi Scale v1 / Mi Smart Scale 2 | 0x181D 10-byte broadcast parsed, unit tests from captures | Not started |
+| 2 | Xiaomi Mi Scale v1 / Mi Smart Scale 2 | 0x181D 10-byte broadcast parsed, unit tests from captures | PR open |
 | 3 | OKOK / Chipsea | Manufacturer-data drivers with capture tests | Not started |
 | 4 | Eufy P3 / C20 / P2 | Broadcast weight with capture tests | Not started |
 | 5 | QN, Etekcity Fit 8S, PICOOC Mini Lite, AAA-series | Drivers with capture tests | Not started |
@@ -50,10 +50,12 @@ driver ships as Experimental (the maintainer owns only a Mi Body Composition Sca
 
 ## Verification record
 
+- 2026-11-09 milestone 2: green (30 tests); v1 and v2 captures from xiaomi-ble's test suite.
+
 - 2026-11-09 milestone 1: `./gradlew testDebugUnitTest assembleDebug` green (22 tests). Not yet
   run on a phone with the Mi BCS 2.
 
 ## Next slice
 
-Milestone 2: `XiaomiMiScaleDriver` for the 10-byte 0x181D broadcast (layout of openScale's
-`MiScaleHandler.parseHistory10`), names `MI_SCALE` / `MI SCALE2`.
+Milestone 3: OKOK / Chipsea manufacturer-data drivers (openScale `OkOkHandler`,
+`ChipseaBleHandler`), with captures from openScale issues or BLE Scale Sync tests.

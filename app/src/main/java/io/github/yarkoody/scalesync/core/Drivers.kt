@@ -1,11 +1,13 @@
 package io.github.yarkoody.scalesync.core
 
 import io.github.yarkoody.scalesync.core.drivers.XiaomiMiBcsDriver
+import io.github.yarkoody.scalesync.core.drivers.XiaomiMiScaleDriver
 
 /** Every scale Scale Sync can read. Order matters only for display. */
 object Drivers {
     val all: List<ScaleDriver> = listOf(
         XiaomiMiBcsDriver,
+        XiaomiMiScaleDriver,
     )
 
     /** Used for installs paired before drivers existed: they could only pair a Mi BCS. */
