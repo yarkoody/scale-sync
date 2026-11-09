@@ -214,7 +214,13 @@ private fun App(padding: PaddingValues) {
             }
             item { TrendCard(history) }
             itemsIndexed(history, key = { _, w -> w.sessionId }) { i, w ->
-                WeighInCard(w, previous = history.getOrNull(i + 1), startExpanded = i == 0)
+                WeighInCard(w, previous = history.getOrNull(i + 1), startExpanded = i == 0, onDelete = {
+                    scope.launch {
+                        val gone = withContext(Dispatchers.IO) { Processor.deleteWeighIn(context, w.sessionId) }
+                        message = if (gone) "Weigh-in deleted here and in Health Connect."
+                        else "Weigh-in deleted here. Scale Sync will remove it from Health Connect as soon as it can."
+                    }
+                })
             }
         }
 

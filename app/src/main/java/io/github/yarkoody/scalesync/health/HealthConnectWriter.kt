@@ -17,8 +17,21 @@ import androidx.health.connect.client.units.Percentage
 import androidx.health.connect.client.units.Power
 import io.github.yarkoody.scalesync.data.WeighIn
 import java.time.ZoneId
+import kotlin.reflect.KClass
 
 object HealthConnectWriter {
+
+    /** Every record type a weigh-in can produce, with the kind used in its client record id. */
+    private val KINDS: List<Pair<String, KClass<out Record>>> = listOf(
+        "weight" to WeightRecord::class,
+        "fat" to BodyFatRecord::class,
+        "water" to BodyWaterMassRecord::class,
+        "bone" to BoneMassRecord::class,
+        "lean" to LeanBodyMassRecord::class,
+        "bmr" to BasalMetabolicRateRecord::class,
+    )
+
+    private fun clientId(kind: String, sessionId: Long) = "scalesync-$kind-$sessionId"
 
     val PERMISSIONS: Set<String> = setOf(
         HealthPermission.getWritePermission(WeightRecord::class),
@@ -51,7 +64,7 @@ object HealthConnectWriter {
         val zone = ZoneId.systemDefault().rules.getOffset(time)
         val m = w.metrics
         val device = Device(type = Device.TYPE_SCALE, manufacturer = w.driver.manufacturer, model = w.driver.model)
-        fun meta(kind: String) = Metadata.autoRecorded(device, "scalesync-$kind-${w.sessionId}", w.version)
+        fun meta(kind: String) = Metadata.autoRecorded(device, clientId(kind, w.sessionId), w.version)
 
         val records = buildList<Record> {
             add(WeightRecord(time, zone, Mass.kilograms(m.weightKg.toDouble()), meta("weight")))
@@ -66,6 +79,26 @@ object HealthConnectWriter {
 
         if (records.none { it is WeightRecord }) return false
         client.insertRecords(records)
+        return true
+    }
+
+    /**
+     * Removes every record Scale Sync wrote for this weigh-in, found by its client record ids.
+     * Health Connect only lets an app delete its own records, so another app's copy of the same
+     * weigh-in (Zepp Life, for example) is never touched. Deleting an id that isn't there is a
+     * no-op. Returns false when Health Connect can't be asked or weight may not be written, so
+     * the caller keeps the removal queued and retries.
+     */
+    suspend fun delete(context: Context, sessionId: Long): Boolean {
+        if (!isAvailable(context)) return false
+        val client = HealthConnectClient.getOrCreate(context)
+        val granted = client.permissionController.getGrantedPermissions()
+        if (HealthPermission.getWritePermission(WeightRecord::class) !in granted) return false
+        for ((kind, type) in KINDS) {
+            // Types without write permission now can't be deleted; nothing new was written to them either.
+            if (HealthPermission.getWritePermission(type) !in granted) continue
+            client.deleteRecords(type, recordIdsList = emptyList(), clientRecordIdsList = listOf(clientId(kind, sessionId)))
+        }
         return true
     }
 }
